@@ -46,15 +46,18 @@
           "color": "#358b13"
         }
       ]
-    
     ],
     "experiments": {
       "typedRoutes": true
     },
-    
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "673dfd06-2e07-47a3-8bb0-6654d97d6d5d"
+      }
     }
-    
   }
 }
