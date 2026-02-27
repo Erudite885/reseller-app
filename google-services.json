@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "113051650330",
-    "project_id": "bimbo-data-53f4d",
-    "storage_bucket": "bimbo-data-53f4d.firebasestorage.app"
+    "project_number": "355929055750",
+    "project_id": "alheri-data",
+    "storage_bucket": "alheri-data.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:113051650330:android:f8fd55090b951b9f9004a3",
+        "mobilesdk_app_id": "1:355929055750:android:58ef2ab5407ca721699987",
         "android_client_info": {
-          "package_name": "com.bimbodata.app"
+          "package_name": "com.alheridata.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBLdAHfNjx-pZ6gFYLjXDS_20plXgErj80"
+          "current_key": "AIzaSyByhQGSjRRn4htGu76FcG-TiNQRVk1_IGQ"
         }
       ],
       "services": {
