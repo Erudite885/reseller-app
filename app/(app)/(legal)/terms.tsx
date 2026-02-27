@@ -10,13 +10,13 @@ export default function Terms() {
     container: {
       flex: 1,
       paddingHorizontal: 16,
-      paddingVertical: 24,
+      // paddingVertical: 24,
       backgroundColor: colors.background,
     },
     sectionTitle: {
       fontSize: 16,
       fontWeight: "bold",
-      marginTop: 12,
+      // marginTop: 12,
       marginBottom: 8,
       color: colors.text,
     },
