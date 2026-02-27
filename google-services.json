@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "113051650330",
+    "project_id": "bimbo-data-53f4d",
+    "storage_bucket": "bimbo-data-53f4d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113051650330:android:f8fd55090b951b9f9004a3",
+        "android_client_info": {
+          "package_name": "com.bimbodata.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLdAHfNjx-pZ6gFYLjXDS_20plXgErj80"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
