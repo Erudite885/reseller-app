@@ -48,7 +48,7 @@ export default function ForgotPasswordScreen() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         // ✅ Clean URL — no query params. Supabase appends #access_token=...&refresh_token=...&type=recovery to this URL
-        redirectTo: "https://symmetrical-parakeet-bimbo.vercel.app/redirect/reset-password",
+        redirectTo: "https://alheri-data.vercel.app/redirect/reset-password",
       });
 
       if (error) throw error;
