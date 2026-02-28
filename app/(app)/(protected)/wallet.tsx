@@ -553,14 +553,10 @@ export default function WalletScreen() {
                           lineHeight: 18,
                         }}
                       >
-                        You need to provide either your{" "}
+                        You need to provide your{" "}
                         <Text style={{ fontWeight: Typography.weights.bold }}>
-                          BVN
-                        </Text>{" "}
-                        or{" "}
-                        <Text style={{ fontWeight: Typography.weights.bold }}>
-                          NIN
-                        </Text>{" "}
+                          BVN{" "}
+                        </Text>
                         to create a virtual account.
                       </Text>
                     </View>
@@ -581,7 +577,7 @@ export default function WalletScreen() {
                     />
 
                     {/* NIN Input */}
-                    <Input
+                    {/* <Input
                       label="NIN"
                       placeholder="11 digits"
                       value={formData.nin}
@@ -593,7 +589,7 @@ export default function WalletScreen() {
                       containerStyle={{
                         opacity: idType === "bvn" ? 0.5 : 1,
                       }}
-                    />
+                    /> */}
 
                     {/* Selected ID Type */}
                     {idType && (
