@@ -33,17 +33,17 @@ export default function ContactScreen() {
   const [isSending, setIsSending] = useState(false);
 
   const contactMethods: ContactMethod[] = [
-    {
-      id: "email",
-      icon: "📧",
-      label: "Email",
-      value: "bimbodata@gmail.com",
-      description: "We typically respond within 24 hours",
-      action: () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        Linking.openURL("mailto:bimbodata@gmail.com");
-      },
-    },
+    // {
+    //   id: "email",
+    //   icon: "📧",
+    //   label: "Email",
+    //   value: "bimbodata@gmail.com",
+    //   description: "We typically respond within 24 hours",
+    //   action: () => {
+    //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    //     Linking.openURL("mailto:bimbodata@gmail.com");
+    //   },
+    // },
     // {
     //   id: "phone",
     //   icon: "📞",
