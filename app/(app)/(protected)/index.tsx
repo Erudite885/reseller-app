@@ -179,10 +179,7 @@ export default function HomeScreen() {
   // ============================================
 
   const handlePurchase = async () => {
-    console.log("1 Entered PIN:", JSON.stringify(transactionPin));
-    console.log("1 Stored PIN:", JSON.stringify(profile?.transaction_pin));
-    console.log("1 Type entered:", typeof transactionPin);
-    console.log("1 Type stored:", typeof profile?.transaction_pin);
+    
     // Validate wallet
     if (!wallet) {
       showToast("Unable to load wallet balance. Please try again.", "error");
@@ -218,11 +215,6 @@ export default function HomeScreen() {
       return;
     }
 
-    console.log("1a Entered PIN:", JSON.stringify(transactionPin));
-    console.log("1a Stored PIN:", JSON.stringify(profile?.transaction_pin));
-    console.log("1a Type entered:", typeof transactionPin);
-    console.log("1a Type stored:", typeof profile?.transaction_pin);
-
     if (profile?.transaction_pin) {
       if (!validatePin(transactionPin, profile.transaction_pin)) {
         showToast("❌ Invalid transaction PIN. Please try again.", "error");
@@ -247,10 +239,7 @@ export default function HomeScreen() {
         return;
       }
     }
-    console.log("2 Entered PIN:", JSON.stringify(transactionPin));
-    console.log("2 Stored PIN:", JSON.stringify(profile?.transaction_pin));
-    console.log("2 Type entered:", typeof transactionPin);
-    console.log("2 Type stored:", typeof profile?.transaction_pin);
+
     // ============================================
     // END TRANSACTION PIN VALIDATION
     // ============================================
