@@ -482,7 +482,7 @@ By accessing or using the Alheri Data App mobile application, you agree to this 
 
 2. Who We Are
 Alheri Data App is a mobile data reselling platform, a technology company based in Nigeria. We provide secure, affordable, and fast mobile data services to users across Nigeria.
-• 📧 Contact Email: bimbodata@gmail.com
+• 📧 Contact Email: alheridata@gmail.com
 
 3. Information We Collect
 We collect personal and technical information to ensure secure transactions and improve your user experience.
@@ -543,7 +543,7 @@ We respect your privacy rights under GDPR and other global standards. You have t
 • Restriction: Request we limit how we use your data
 • Objection: Object to processing under certain conditions
 • Portability: Request transfer of your data to another platform
-📩 To exercise these rights, contact: bimbodata@gmail.com
+📩 To exercise these rights, contact: alheridata@gmail.com
 We respond within 30 days of verified requests.
 
 10. Children’s Privacy
@@ -560,7 +560,7 @@ You will be notified of major changes via the app or official communication chan
 12. Contact Us
 For any privacy-related concerns or questions:
 Alheri Data App
-📧 Email: bimbodata@gmail.com
+📧 Email: alheridata@gmail.com
 
 © 2025 Alheri Data App — All Rights Reserved
 
@@ -578,7 +578,7 @@ If you do not agree, do not use our services.
 1. About Us
 Alheri Data App is a Nigerian-based technology company offering secure, affordable, and fast mobile data services nationwide.
 
-• 📧 Email: bimbodata@gmail.com
+• 📧 Email: alheridata@gmail.com
 
 • 📱 WhatsApp: +2347057517841 | +2347015888155
 
@@ -667,7 +667,7 @@ These Terms are governed by the laws of the Federal Republic of Nigeria. Any dis
 
 17. Contact Us
 For support or inquiries:
-• 📧 Email: bimbodata@gmail.com
+• 📧 Email: alheridata@gmail.com
 
 • 📱 WhatsApp: +2347057517841 | +2347015888155
 
