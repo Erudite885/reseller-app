@@ -58,18 +58,18 @@ export default function Terms() {
       }
 
       // Render email as a clickable link
-      if (trimmedLine.includes("bimbodata@gmail.com")) {
-        const parts = trimmedLine.split("bimbodata@gmail.com");
+      if (trimmedLine.includes("alheridata@gmail.com")) {
+        const parts = trimmedLine.split("alheridata@gmail.com");
         return (
           <Text key={index} style={styles.paragraph}>
             {parts[0]}
             <Text
               style={styles.emailLink}
               onPress={() =>
-                Linking.openURL("mailto:bimbodata@gmail.com")
+                Linking.openURL("mailto:alheridata@gmail.com")
               }
             >
-              bimbodata@gmail.com
+              alheridata@gmail.com
             </Text>
             {parts[1]}
           </Text>
