@@ -39,7 +39,6 @@ yarn-error.*
 yarn.lock
 app-example
 .pnp*
-eas.json
 
 .env
 txt.txt
