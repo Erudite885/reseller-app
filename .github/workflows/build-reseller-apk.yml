@@ -1,0 +1,111 @@
+name: Build Reseller APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      reseller_id:
+        description: 'Reseller ID'
+        required: true
+        type: string
+      config_id:
+        description: 'Build Configuration ID'
+        required: true
+        type: string
+
+env:
+  EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
+  EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
+  EXPO_PUBLIC_BASE_URL: ${{ secrets.EXPO_PUBLIC_BASE_URL }}
+  EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
+  EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
+  EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Make scripts executable
+        run: chmod +x scripts/generate-reseller-assets.sh
+
+      - name: Generate reseller assets
+        run: bash scripts/generate-reseller-assets.sh
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_SECRET: ${{ secrets.API_SECRET_KEY }}
+          CONFIG_ID: ${{ github.event.inputs.config_id }}
+
+      - name: Build Android APK
+        run: |
+          eas build \
+            --platform android \
+            --profile production \
+            --non-interactive \
+            --no-wait \
+            --json > build-result.json
+          
+          BUILD_ID=$(cat build-result.json | jq -r '.id')
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+
+      - name: Wait for build
+        run: |
+          echo "⏳ Waiting for build $BUILD_ID..."
+          for i in {1..60}; do
+            STATUS=$(eas build:view $BUILD_ID --json 2>/dev/null | jq -r '.status // "IN_PROGRESS"')
+            
+            if [ "$STATUS" = "FINISHED" ]; then
+              APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl // ""')
+              echo "APK_URL=$APK_URL" >> $GITHUB_ENV
+              echo "✅ Build complete!"
+              
+              # Notify backend
+              curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
+                -d "{
+                  \"configId\": \"${{ github.event.inputs.config_id }}\",
+                  \"resellerId\": \"${{ github.event.inputs.reseller_id }}\",
+                  \"status\": \"completed\",
+                  \"apkUrl\": \"$APK_URL\"
+                }"
+              exit 0
+            elif [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Build failed"
+              
+              curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
+                -d "{
+                  \"configId\": \"${{ github.event.inputs.config_id }}\",
+                  \"resellerId\": \"${{ github.event.inputs.reseller_id }}\",
+                  \"status\": \"failed\"
+                }"
+              exit 1
+            fi
+            
+            echo "Build status: $STATUS — checking again in 30s..."
+            sleep 30
+          done
+          
+          echo "❌ Build timed out"
+          exit 1
