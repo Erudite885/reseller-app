@@ -64,7 +64,7 @@ jobs:
             --no-wait \
             --json > build-result.json
           
-          BUILD_ID=$(cat build-result.json | jq -r '.id')
+          BUILD_ID=$(cat build-result.json | jq -r '.[0].id // .id')
           echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
 
       - name: Wait for build
