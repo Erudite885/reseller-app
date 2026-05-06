@@ -39,7 +39,7 @@ const baseUrl =
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: RESELLER_CONFIG.appName,
-  slug: RESELLER_CONFIG.slug,
+  slug: "reseller-data",
   version: RESELLER_CONFIG.config?.version || "1.0.0",
   orientation: "portrait",
   icon: RESELLER_CONFIG.assets?.icon || "./assets/images/icon.png",
