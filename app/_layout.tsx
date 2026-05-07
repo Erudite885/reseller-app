@@ -31,7 +31,13 @@ async function registerForPushNotificationsAsync() {
       name: "default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#53ff1f7c",
+      lightColor: (() => {
+  try {
+    return useResellerStore.getState().config.theme.primary + "7c";
+  } catch {
+    return "#3791147c";
+  }
+})(),
     });
   }
 
