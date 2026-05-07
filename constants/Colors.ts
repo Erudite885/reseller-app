@@ -220,6 +220,9 @@ export const Shadows = {
   },
 };
 
+export type ColorScheme = 'light' | 'dark';
+export type ThemeColors = typeof Colors.light;
+
 // // constants/Colors.ts
 
 // import { useResellerStore } from "@/store/resellerStore";
