@@ -3,11 +3,11 @@ import Constants from "expo-constants";
 
 export interface ResellerTheme {
   primary: string;
-  secondary: string;
-  background: string;
-  text: string;
-  accent: string;
-  statusBar: "light" | "dark";
+  secondary?: string;
+  background?: string;
+  text?: string;
+  accent?: string;
+  statusBar?: "light" | "dark";
 }
 
 export interface ResellerAssets {
@@ -77,3 +77,45 @@ export const useResellerStore = create<ResellerState>(() => ({
     extraConfig?.config?.apiBaseUrl || defaultConfig.config.apiBaseUrl,
   storeUrl: extraConfig?.config?.storeUrl || defaultConfig.config.storeUrl,
 }));
+
+// Add at the bottom of store/resellerStore.ts
+
+/**
+ * Get asset source for a given asset type.
+ * Handles the static require() limitation of React Native.
+ */
+const ASSET_MAP: Record<string, any> = {
+  "./assets/images/icon.png": require("@/assets/images/icon.png"),
+  "./assets/images/splash.png": require("@/assets/images/splash.png"),
+  "./assets/images/logo2.png": require("@/assets/images/logo2.png"),
+  "./assets/images/adaptive-icon.png": require("@/assets/images/adaptive-icon.png"),
+  "./assets/images/notification-icon.png": require("@/assets/images/icon.png"),
+  "./assets/custom/icon.png": require("@/assets/custom/icon.png"),
+  "./assets/custom/splash.png": require("@/assets/custom/splash.png"),
+  "./assets/custom/adaptive-icon.png": require("@/assets/custom/adaptive-icon.png"),
+};
+
+export function getResellerAsset(
+  assetType: "icon" | "splash" | "logo" | "adaptiveIcon",
+): any {
+  try {
+    const config = useResellerStore.getState().config;
+    const assetPath = config.assets?.[assetType];
+
+    if (assetPath && ASSET_MAP[assetPath]) {
+      return ASSET_MAP[assetPath];
+    }
+  } catch {
+    // Fall through to defaults
+  }
+
+  // Fallback defaults
+  const defaults: Record<string, any> = {
+    icon: require("@/assets/images/icon.png"),
+    splash: require("@/assets/images/splash.png"),
+    logo: require("@/assets/images/logo2.png"),
+    adaptiveIcon: require("@/assets/images/adaptive-icon.png"),
+  };
+
+  return defaults[assetType];
+}
