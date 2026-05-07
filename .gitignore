@@ -46,7 +46,7 @@ txt.txt
 *t.md
 *ts.txt
 
-logs.txt
+logs*.txt
 
 
 *firebase-*.json
