@@ -179,7 +179,6 @@ export default function HomeScreen() {
   // ============================================
 
   const handlePurchase = async () => {
-    
     // Validate wallet
     if (!wallet) {
       showToast("Unable to load wallet balance. Please try again.", "error");
@@ -187,10 +186,13 @@ export default function HomeScreen() {
     }
 
     // Determine purchase amount
+    // const purchaseAmount =
+    //   serviceType === "data"
+    //     ? selectedPlan?.sell_price
+    //     : parseFloat(amount || "0");
+
     const purchaseAmount =
-      serviceType === "data"
-        ? selectedPlan?.sell_price
-        : parseFloat(amount || "0");
+      serviceType === "data" ? selectedPlan?.price : parseFloat(amount || "0");
 
     if (!purchaseAmount || purchaseAmount <= 0) {
       showToast("Please select a valid amount.", "error");
@@ -263,7 +265,7 @@ export default function HomeScreen() {
 
         if (result.success) {
           showToast(
-            `${selectedPlan.plan} data purchased successfully for ${phoneNumber}!`,
+            `${selectedPlan.plan_name} data purchased successfully for ${phoneNumber}!`,
             "success",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1257,7 +1259,7 @@ export default function HomeScreen() {
                       const isSelected = selectedPlanId === plan.plan_id;
                       return (
                         <Pressable
-                          key={`${plan.plan_id}-${plan.sell_price}`}
+                          key={`${plan.plan_id}-${plan.price}`}
                           onPress={() => {
                             Haptics.impactAsync(
                               Haptics.ImpactFeedbackStyle.Medium,
@@ -1283,7 +1285,7 @@ export default function HomeScreen() {
                               marginBottom: Spacing.xs / 2,
                             }}
                           >
-                            {plan.plan}
+                            {plan.plan_name}
                           </Text>
 
                           <Text
@@ -1294,7 +1296,7 @@ export default function HomeScreen() {
                               marginBottom: Spacing.xs / 2,
                             }}
                           >
-                            ₦{plan.sell_price.toLocaleString()}
+                            ₦{plan.price.toLocaleString()}
                           </Text>
 
                           <Text
