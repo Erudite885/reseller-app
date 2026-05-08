@@ -87,12 +87,7 @@ export default function HomeScreen() {
     email: profile?.email || "",
     name: profile?.username || "",
     phoneNumber: "",
-    bvn: "",
-    nin: "",
   });
-
-  // Track which ID type user chose
-  const [idType, setIdType] = useState<"bvn" | "nin" | null>(null);
 
   // Fetch data plans for selected network
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
@@ -186,11 +181,6 @@ export default function HomeScreen() {
     }
 
     // Determine purchase amount
-    // const purchaseAmount =
-    //   serviceType === "data"
-    //     ? selectedPlan?.sell_price
-    //     : parseFloat(amount || "0");
-
     const purchaseAmount =
       serviceType === "data" ? selectedPlan?.price : parseFloat(amount || "0");
 
@@ -337,63 +327,42 @@ export default function HomeScreen() {
 
   const handleFormChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    if (field === "bvn" && value.trim().length > 0) {
-      setIdType("bvn");
-      setFormData((prev) => ({ ...prev, nin: "" }));
-    } else if (field === "nin" && value.trim().length > 0) {
-      setIdType("nin");
-      setFormData((prev) => ({ ...prev, bvn: "" }));
-    } else if (field === "bvn" && value.trim().length === 0 && !formData.nin) {
-      setIdType(null);
-    } else if (field === "nin" && value.trim().length === 0 && !formData.bvn) {
-      setIdType(null);
-    }
   };
 
   // Update to index.tsx - only the handleCreateAccount function
+
   const handleCreateAccount = async () => {
-    console.log("Starting handleCreateAccount with formData:", formData);
     setIsProcessing(true);
 
     try {
       const result = await createVirtualAccount.mutateAsync({
         fullName: formData.name,
         phoneNumber: formData.phoneNumber,
-        bvn: formData.bvn || undefined,
-        nin: formData.nin || undefined,
         email: formData.email,
       });
-
-      console.log("Create account result:", result);
 
       showToast(
         result.message || "Virtual account created successfully!",
         "success",
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Refresh virtual accounts list
       refetchVirtualAccounts();
 
       setTimeout(() => {
         setShowCreateAccountForm(false);
       }, 2000);
     } catch (error: any) {
-      console.error("Create account error:", error);
       showToast(error.message || "Failed to create virtual account", "error");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsProcessing(false);
-      console.log("handleCreateAccount completed");
     }
   };
 
   const isFormValid =
     formData.name.trim().length >= 3 &&
     formData.phoneNumber.trim().length >= 11 &&
-    formData.email.trim().length >= 5 &&
-    (formData.bvn.trim().length === 11 || formData.nin.trim().length === 11);
+    formData.email.trim().length >= 5;
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -916,77 +885,6 @@ export default function HomeScreen() {
                         />
                       </View>
 
-                      {/* BVN Section */}
-                      <View
-                        style={{
-                          backgroundColor: colors.primary + "20",
-                          borderWidth: 1,
-                          borderColor: colors.primary + "40",
-                          borderRadius: Radius.md,
-                          padding: Spacing.md,
-                        }}
-                      >
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: Spacing.md,
-                          }}
-                        >
-                          <Text
-                            style={{ fontSize: 16, marginRight: Spacing.xs }}
-                          >
-                            ℹ️
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: Typography.sizes.xs,
-                              color: colors.textSecondary,
-                            }}
-                          >
-                            Enter{" "}
-                            <Text style={{ fontWeight: "bold" }}>your BVN</Text>
-                          </Text>
-                        </View>
-
-                        <View style={{ marginBottom: Spacing.md }}>
-                          <Text
-                            style={{
-                              fontSize: Typography.sizes.sm,
-                              color: colors.textSecondary,
-                              marginBottom: Spacing.xs,
-                            }}
-                          >
-                            BVN
-                            {idType === "nin" && (
-                              <Text style={{ color: colors.textSecondary }}>
-                                {" "}
-                                (disabled)
-                              </Text>
-                            )}
-                          </Text>
-                          <TextInput
-                            value={formData.bvn}
-                            onChangeText={(value) =>
-                              handleFormChange("bvn", value)
-                            }
-                            style={{
-                              height: 48,
-                              backgroundColor: colors.backgroundSecondary,
-                              borderRadius: Radius.sm,
-                              paddingHorizontal: Spacing.md,
-                              color: colors.text,
-                              opacity: idType === "nin" ? 0.5 : 1,
-                            }}
-                            placeholder="12345678901"
-                            placeholderTextColor={colors.textSecondary}
-                            keyboardType="numeric"
-                            maxLength={11}
-                            editable={!isProcessing && idType !== "nin"}
-                          />
-                        </View>
-                      </View>
-
                       {/* Submit Button */}
                       <Button
                         title={
@@ -1029,8 +927,7 @@ export default function HomeScreen() {
                           }}
                         >
                           ⚠️ Your information is only used to create your
-                          virtual account with our banking partners (9Payment
-                          Service Bank & PalmPay).
+                          virtual account with our banking partners (PalmPay).
                         </Text>
                       </View>
                     </View>
