@@ -39,7 +39,7 @@ export function usePurchaseData() {
     }) => {
       if (!user?.id) throw new Error("No user");
 
-      const requestId = `REQ-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const requestId = `REQ-RR-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
       // Step 1: Get reseller ID from store name
       const { data: reseller, error: resellerError } = await supabase
@@ -134,7 +134,7 @@ export function usePurchaseAirtime() {
     }) => {
       if (!user?.id) throw new Error("No user");
 
-      const requestId = `REQ-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const requestId = `REQ-RR-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
       console.log("[PurchaseAirtime]", {
         network: purchaseData.network,
