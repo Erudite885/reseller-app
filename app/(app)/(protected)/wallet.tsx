@@ -46,12 +46,12 @@ export default function WalletScreen() {
     email: profile?.email || "",
     name: profile?.username || "",
     phoneNumber: "",
-    bvn: "",
-    nin: "",
+    // bvn: "",
+    // nin: "",
   });
 
   // Track which ID type user chose
-  const [idType, setIdType] = useState<"bvn" | "nin" | null>(null);
+  // const [idType, setIdType] = useState<"bvn" | "nin" | null>(null);
 
   // Has virtual account
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
@@ -69,31 +69,13 @@ export default function WalletScreen() {
 
   // Form validation
   const isFormValid =
-    formData.name.trim() &&
-    formData.phoneNumber.trim() &&
-    formData.phoneNumber.length === 11 &&
-    (formData.bvn.trim() || formData.nin.trim());
+    formData.name.trim().length >= 3 &&
+    formData.phoneNumber.trim().length === 11 &&
+    formData.email.trim().length >= 5 &&
+    formData.email.includes("@");
 
   const handleFormChange = (field: string, value: string) => {
-    if (field === "bvn") {
-      if (value) {
-        setIdType("bvn");
-        setFormData({ ...formData, bvn: value, nin: "" });
-      } else {
-        if (idType === "bvn") setIdType(null);
-        setFormData({ ...formData, bvn: value });
-      }
-    } else if (field === "nin") {
-      if (value) {
-        setIdType("nin");
-        setFormData({ ...formData, nin: value, bvn: "" });
-      } else {
-        if (idType === "nin") setIdType(null);
-        setFormData({ ...formData, nin: value });
-      }
-    } else {
-      setFormData({ ...formData, [field]: value });
-    }
+    setFormData({ ...formData, [field]: value });
   };
 
   const displayToast = (message: string) => {
@@ -115,8 +97,6 @@ export default function WalletScreen() {
       await createVirtualAccountMutation.mutateAsync({
         fullName: formData.name,
         phoneNumber: formData.phoneNumber,
-        bvn: formData.bvn || undefined,
-        nin: formData.nin || undefined,
         email: formData.email,
       });
 
@@ -131,10 +111,10 @@ export default function WalletScreen() {
         email: profile?.email || "",
         name: profile?.username || "",
         phoneNumber: "",
-        bvn: "",
-        nin: "",
+        // bvn: "",
+        // nin: "",
       });
-      setIdType(null);
+      // setIdType(null);
 
       // Refetch virtual accounts
       refetchVirtualAccounts();
@@ -528,7 +508,7 @@ export default function WalletScreen() {
                 />
 
                 {/* BVN Section */}
-                <Card
+                {/* <Card
                   variant="outlined"
                   padding="md"
                   style={{
@@ -561,8 +541,8 @@ export default function WalletScreen() {
                       </Text>
                     </View>
 
-                    {/* BVN Input */}
-                    <Input
+                    {/* BVN Input *
+                    {/* <Input
                       label="BVN"
                       placeholder="11 digits"
                       value={formData.bvn}
@@ -574,9 +554,9 @@ export default function WalletScreen() {
                       containerStyle={{
                         opacity: idType === "nin" ? 0.5 : 1,
                       }}
-                    />
+                    /> *
 
-                    {/* NIN Input */}
+                    {/* NIN Input *
                     {/* <Input
                       label="NIN"
                       placeholder="11 digits"
@@ -591,8 +571,8 @@ export default function WalletScreen() {
                       }}
                     /> */}
 
-                    {/* Selected ID Type */}
-                    {idType && (
+                {/* Selected ID Type */}
+                {/* {idType && (
                       <View
                         style={{
                           flexDirection: "row",
@@ -617,9 +597,9 @@ export default function WalletScreen() {
                           Using {idType.toUpperCase()}
                         </Text>
                       </View>
-                    )}
+                    )} *
                   </View>
-                </Card>
+                </Card> */}
 
                 {/* Security Info */}
                 <Card
