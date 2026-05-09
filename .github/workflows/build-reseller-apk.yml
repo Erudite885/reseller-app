@@ -95,18 +95,6 @@ jobs:
               \"status\": \"completed\"
             }"
 
-      - name: Notify backend (failure)
-        if: failure()
-        run: |
-          curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
-            -d "{
-              \"configId\": \"${{ github.event.inputs.config_id }}\",
-              \"resellerId\": \"${{ github.event.inputs.reseller_id }}\",
-              \"status\": \"failed\"
-            }"
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
