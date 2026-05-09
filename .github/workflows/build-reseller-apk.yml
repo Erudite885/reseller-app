@@ -11,14 +11,15 @@ on:
         description: "Build Configuration ID"
         required: true
         type: string
+      store_name:
+        description: "Store name (used for APK filename, e.g. soledad)"
+        required: true
+        type: string
 
 env:
   EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
   EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
   EXPO_PUBLIC_BASE_URL: ${{ secrets.EXPO_PUBLIC_BASE_URL }}
-  EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
-  EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
-  EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
 
 jobs:
   build:
@@ -55,6 +56,19 @@ jobs:
           API_SECRET: ${{ secrets.API_SECRET_KEY }}
           CONFIG_ID: ${{ github.event.inputs.config_id }}
 
+      # ✅ Fail fast before spending build minutes if any Xixapay secret is missing
+      - name: Verify Xixapay secrets
+        env:
+          EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
+          EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
+          EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
+        run: |
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_SECRET_KEY" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_SECRET_KEY is empty"; exit 1; fi
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_API_KEY" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_API_KEY is empty"; exit 1; fi
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_BUSINESS_ID" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_BUSINESS_ID is empty"; exit 1; fi
+          echo "All Xixapay secrets present ✓"
+
+      # ✅ Env vars passed directly to this step so eas build --local inherits them
       - name: Build Android APK
         run: |
           eas build \
@@ -62,7 +76,14 @@ jobs:
             --profile production-apk \
             --local \
             --non-interactive \
-            --output=./reseller.apk
+            --output="./${{ github.event.inputs.store_name }}.apk"
+        env:
+          EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
+          EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_BASE_URL: ${{ secrets.EXPO_PUBLIC_BASE_URL }}
+          EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
+          EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
+          EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
 
       - name: Notify backend
         if: success()
@@ -91,6 +112,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: reseller-apk-${{ github.event.inputs.reseller_id }}
-          path: ./reseller.apk
+          name: ${{ github.event.inputs.store_name }}-apk
+          path: "./${{ github.event.inputs.store_name }}.apk"
           retention-days: 7
