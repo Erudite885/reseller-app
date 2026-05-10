@@ -1,10 +1,13 @@
 // app/(app)/(protected)/contact.tsx
+
 import { Button, Card } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { useTheme } from "@/hooks/useTheme";
+import { supabase } from "@/lib/supabase";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Linking,
@@ -31,41 +34,57 @@ export default function ContactScreen() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [resellerEmail, setResellerEmail] = useState("");
+  const [storeName, setStoreName] = useState("");
+
+  // Fetch reseller contact info
+  useEffect(() => {
+    const fetchResellerInfo = async () => {
+      const storeSlug = useResellerStore.getState().config.storeName;
+
+      const { data } = await supabase
+        .from("resellers")
+        .select("email, store_name")
+        .eq("store_name", storeSlug)
+        .eq("status", "active")
+        .single();
+
+      if (data) {
+        setResellerEmail(data.email);
+        setStoreName(data.store_name);
+      }
+    };
+
+    fetchResellerInfo();
+  }, []);
 
   const contactMethods: ContactMethod[] = [
     // {
-    //   id: "email",
-    //   icon: "📧",
-    //   label: "Email",
-    //   value: "bimbodata@gmail.com",
-    //   description: "We typically respond within 24 hours",
-    //   action: () => {
-    //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    //     Linking.openURL("mailto:bimbodata@gmail.com");
-    //   },
-    // },
-    // {
-    //   id: "phone",
-    //   icon: "📞",
-    //   label: "Phone",
+    //   id: "whatsapp",
+    //   icon: "💬",
+    //   label: "WhatsApp",
     //   value: "+234 705 751 7841",
-    //   description: "Mon - Fri, 9AM - 6PM WAT",
+    //   description: "Chat with us anytime",
     //   action: () => {
     //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    //     Linking.openURL("tel:+2347057517841");
+    //     Linking.openURL("https://wa.me/2347057517841");
     //   },
     // },
-    {
-      id: "whatsapp",
-      icon: "💬",
-      label: "WhatsApp",
-      value: "+234 705 751 7841",
-      description: "Chat with us anytime",
-      action: () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        Linking.openURL("https://wa.me/2347057517841");
-      },
-    },
+    ...(resellerEmail
+      ? [
+          {
+            id: "email",
+            icon: "📧",
+            label: "Email",
+            value: resellerEmail,
+            description: "We typically respond within 24 hours",
+            action: () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Linking.openURL(`mailto:${resellerEmail}`);
+            },
+          },
+        ]
+      : []),
   ];
 
   const handleSendMessage = async () => {
@@ -78,8 +97,51 @@ export default function ContactScreen() {
     setIsSending(true);
 
     try {
-      // Simulate API call - replace with actual implementation
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        Alert.alert("Error", "You must be logged in to send a message");
+        return;
+      }
+
+      // Get reseller ID
+      const storeSlug = useResellerStore.getState().config.storeName;
+      const { data: reseller } = await supabase
+        .from("resellers")
+        .select("id")
+        .eq("store_name", storeSlug)
+        .eq("status", "active")
+        .single();
+
+      if (!reseller) {
+        Alert.alert("Error", "Could not find reseller information");
+        return;
+      }
+
+      // Check if user is customer
+      const { data: customer } = await supabase
+        .from("reseller_customers")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .eq("reseller_id", reseller.id)
+        .single();
+
+      // Save message to database
+      const { error } = await supabase.from("reseller_notifications").insert({
+        reseller_id: reseller.id,
+        notification_type: "support",
+        message: `Subject: ${subject}\n\n${message}`,
+        metadata: {
+          from: user.email,
+          customer_id: customer?.id || null,
+          sent_at: new Date().toISOString(),
+        },
+      });
+
+      if (error) throw error;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
@@ -97,6 +159,7 @@ export default function ContactScreen() {
         ],
       );
     } catch (error) {
+      console.error("Error sending message:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Failed to send message. Please try again.");
     } finally {
@@ -327,41 +390,6 @@ export default function ContactScreen() {
               Monday - Friday: 9:00 AM - 6:00 PM WAT{"\n"}
               Saturday: 10:00 AM - 4:00 PM WAT{"\n"}
               Sunday: Closed
-            </Text>
-          </Card>
-        </View>
-
-        {/* Address */}
-        <View style={{ paddingHorizontal: Spacing.lg }}>
-          <Card variant="outlined" padding="md">
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: Spacing.sm,
-              }}
-            >
-              <Text style={{ fontSize: 24, marginRight: Spacing.sm }}>📍</Text>
-              <Text
-                style={{
-                  fontSize: Typography.sizes.lg,
-                  fontWeight: Typography.weights.bold,
-                  color: colors.text,
-                }}
-              >
-                Our Location
-              </Text>
-            </View>
-            <Text
-              style={{
-                fontSize: Typography.sizes.base,
-                color: colors.textSecondary,
-                lineHeight: 22,
-              }}
-            >
-              123 VTU Services Plaza{"\n"}
-              Victoria Island, Lagos{"\n"}
-              Nigeria
             </Text>
           </Card>
         </View>
