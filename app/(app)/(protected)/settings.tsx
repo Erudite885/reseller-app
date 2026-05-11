@@ -201,7 +201,7 @@ export default function SettingsScreen() {
     }
 
     // ✅ Use the hook's validatePin method instead of manual comparison
-    if (!validatePin(pinInput)) {
+    if (!validatePin(pinInput, profile?.transaction_pin)) {
       Alert.alert("Error", "Invalid transaction PIN");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setPinInput("");
