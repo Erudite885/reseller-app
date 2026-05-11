@@ -38,7 +38,7 @@ export default function TransactionHistoryScreen() {
       searchQuery === "" ||
       txn.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
       txn.phone_number?.includes(searchQuery) ||
-      txn.network.toLowerCase().includes(searchQuery.toLowerCase());
+      txn.network?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
