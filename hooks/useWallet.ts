@@ -1,3 +1,5 @@
+// hooks/useWallet.ts
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
