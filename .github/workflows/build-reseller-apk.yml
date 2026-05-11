@@ -15,6 +15,11 @@ on:
         description: "Store name (used for APK filename, e.g. soledad)"
         required: true
         type: string
+      environment:
+        description: 'Build environment'
+        required: false
+        type: string
+        default: 'production'
 
 env:
   EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
