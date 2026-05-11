@@ -607,8 +607,7 @@ export default function SettingsScreen() {
                     fontWeight: "600",
                   }}
                 >
-                  {profile?.account_type || "Personal"} • Member since{" "}
-                  {getMemberSinceDate()}
+                  • Member since {getMemberSinceDate()} •
                 </Text>
               </View>
             </View>
