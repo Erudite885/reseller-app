@@ -54,18 +54,30 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/generate-reseller-assets.sh
 
-      - name: Generate reseller assets
-        run: bash scripts/generate-reseller-assets.sh
-        env:
-          API_URL: ${{ secrets.API_URL }}
-          API_SECRET: ${{ secrets.API_SECRET_KEY }}
-          CONFIG_ID: ${{ github.event.inputs.config_id }}
+      - name: Get completed reseller configs
+        id: configs
+        run: |
+          CONFIGS=$(curl -s "${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}/rest/v1/reseller_app_configs?select=id,config&build_status=eq.completed" \
+            -H "apikey: ${{ secrets.BIMBO_SUPABASE_SECRET_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.BIMBO_SUPABASE_SECRET_KEY }}")
+          echo "configs=$CONFIGS" >> $GITHUB_OUTPUT
 
-      - name: Publish OTA Update
+      - name: Publish OTA for each reseller
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          API_URL: ${{ secrets.API_URL }}
+          API_SECRET: ${{ secrets.API_SECRET_KEY }}
         run: |
-          eas update --auto \
-            --platform android \
-            --channel production \
-            --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
+          echo '${{ steps.configs.outputs.configs }}' | jq -c '.[]' | while read item; do
+            CONFIG_ID=$(echo "$item" | jq -r '.id')
+            STORE_NAME=$(echo "$item" | jq -r '.config.storeName')
+            
+            echo "Publishing OTA for $STORE_NAME (config: $CONFIG_ID)"
+            
+            bash scripts/generate-reseller-assets.sh
+            
+            eas update --auto \
+              --platform android \
+              --channel production \
+              --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
+          done
