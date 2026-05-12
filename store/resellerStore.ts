@@ -90,10 +90,15 @@ const ASSET_MAP: Record<string, any> = {
   "./assets/images/logo2.png": require("@/assets/images/logo2.png"),
   "./assets/images/adaptive-icon.png": require("@/assets/images/adaptive-icon.png"),
   "./assets/images/notification-icon.png": require("@/assets/images/icon.png"),
-  "./assets/custom/icon.png": require("@/assets/custom/icon.png"),
-  "./assets/custom/splash.png": require("@/assets/custom/splash.png"),
-  "./assets/custom/adaptive-icon.png": require("@/assets/custom/adaptive-icon.png"),
+  // "./assets/custom/icon.png": require("@/assets/custom/icon.png"),
+  // "./assets/custom/splash.png": require("@/assets/custom/splash.png"),
+  // "./assets/custom/adaptive-icon.png": require("@/assets/custom/adaptive-icon.png"),
 };
+
+// Custom reseller assets - only available in APK builds, not OTA
+try { ASSET_MAP["./assets/custom/icon.png"] = require("@/assets/custom/icon.png"); } catch {}
+try { ASSET_MAP["./assets/custom/splash.png"] = require("@/assets/custom/splash.png"); } catch {}
+try { ASSET_MAP["./assets/custom/adaptive-icon.png"] = require("@/assets/custom/adaptive-icon.png"); } catch {}
 
 export function getResellerAsset(
   assetType: "icon" | "splash" | "logo" | "adaptiveIcon",
