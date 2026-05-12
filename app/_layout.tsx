@@ -223,11 +223,95 @@ async function hasExistingPushToken(userId: string): Promise<boolean> {
 // ============================================
 // Setup Customer for Reseller
 // ============================================
+// async function setupCustomerForReseller(userId: string, userEmail: string) {
+//   try {
+//     const storeSlug = useResellerStore.getState().config.storeName;
+
+//     // Find the reseller by store name
+//     const { data: reseller, error: resellerError } = await supabase
+//       .from("resellers")
+//       .select("id, store_name")
+//       .eq("store_name", storeSlug)
+//       .eq("status", "active")
+//       .single();
+
+//     if (resellerError || !reseller) {
+//       console.log("[Auth] No active reseller found for store:", storeSlug);
+//       return;
+//     }
+
+//     // Upsert customer record (scoped to this reseller)
+//     const { error: customerError } = await supabase
+//       .from("reseller_customers")
+//       .upsert(
+//         {
+//           reseller_id: reseller.id,
+//           email: userEmail,
+//           auth_user_id: userId,
+//         },
+//         {
+//           onConflict: "reseller_id,email",
+//           ignoreDuplicates: true,
+//         },
+//       );
+
+//     if (customerError) {
+//       console.error("[Auth] Failed to upsert customer:", customerError);
+//       return;
+//     }
+
+//     // Create wallet if it doesn't exist
+//     const { data: existingWallet, error: walletQueryError } = await supabase
+//       .from("reseller_customer_wallets")
+//       .select("id")
+//       .eq("reseller_id", reseller.id)
+//       .eq("customer_id", userId)
+//       .single();
+
+//     if (walletQueryError && walletQueryError.code !== "PGRST116") {
+//       console.error("[Auth] Error checking wallet:", walletQueryError);
+//     }
+
+//     if (!existingWallet) {
+//       const { error: walletError } = await supabase
+//         .from("reseller_customer_wallets")
+//         .insert({
+//           reseller_id: reseller.id,
+//           customer_id: userId,
+//           balance: 0,
+//           total_spent: 0,
+//         });
+
+//       if (walletError) {
+//         console.error("[Auth] Failed to create customer wallet:", walletError);
+//       } else {
+//         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
+//       }
+//     }
+
+//     // Check if this user is the store owner
+//     const { data: storeOwner } = await supabase
+//       .from("resellers")
+//       .select("auth_user_id")
+//       .eq("store_name", storeSlug)
+//       .eq("auth_user_id", userId)
+//       .single();
+
+//     if (storeOwner) {
+//       console.log("[Auth] 👑 Store owner logged in:", storeSlug);
+//     } else {
+//       console.log("[Auth] 👤 Customer logged in:", userEmail);
+//     }
+//   } catch (error) {
+//     console.error("[Auth] ❌ Error setting up customer:", error);
+//   }
+// }
+
 async function setupCustomerForReseller(userId: string, userEmail: string) {
   try {
     const storeSlug = useResellerStore.getState().config.storeName;
+    const username = userEmail.split("@")[0];
 
-    // Find the reseller by store name
     const { data: reseller, error: resellerError } = await supabase
       .from("resellers")
       .select("id, store_name")
@@ -240,56 +324,60 @@ async function setupCustomerForReseller(userId: string, userEmail: string) {
       return;
     }
 
-    // Upsert customer record (scoped to this reseller)
-    const { error: customerError } = await supabase
+    // Check if customer exists for this reseller
+    const { data: existingCustomer } = await supabase
       .from("reseller_customers")
-      .upsert(
-        {
-          reseller_id: reseller.id,
-          email: userEmail,
-          auth_user_id: userId,
-        },
-        {
-          onConflict: "reseller_id,email",
-          ignoreDuplicates: true,
-        },
-      );
-
-    if (customerError) {
-      console.error("[Auth] Failed to upsert customer:", customerError);
-      return;
-    }
-
-    // Create wallet if it doesn't exist
-    const { data: existingWallet, error: walletQueryError } = await supabase
-      .from("reseller_customer_wallets")
-      .select("id")
+      .select("id, auth_user_id")
       .eq("reseller_id", reseller.id)
-      .eq("customer_id", userId)
+      .eq("email", userEmail)
       .single();
 
-    if (walletQueryError && walletQueryError.code !== "PGRST116") {
-      console.error("[Auth] Error checking wallet:", walletQueryError);
-    }
+    let customerId: string | null = null;
 
-    if (!existingWallet) {
-      const { error: walletError } = await supabase
-        .from("reseller_customer_wallets")
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      if (!existingCustomer.auth_user_id) {
+        await supabase
+          .from("reseller_customers")
+          .update({ auth_user_id: userId })
+          .eq("id", existingCustomer.id);
+      }
+    } else {
+      const { data: newCustomer } = await supabase
+        .from("reseller_customers")
         .insert({
           reseller_id: reseller.id,
-          customer_id: userId,
+          email: userEmail,
+          first_name: username,
+          auth_user_id: userId,
+        })
+        .select("id")
+        .single();
+
+      if (newCustomer) customerId = newCustomer.id;
+    }
+
+    // Create wallet using reseller_customers.id
+    if (customerId) {
+      const { data: existingWallet } = await supabase
+        .from("reseller_customer_wallets")
+        .select("id")
+        .eq("reseller_id", reseller.id)
+        .eq("customer_id", customerId)
+        .single();
+
+      if (!existingWallet) {
+        await supabase.from("reseller_customer_wallets").insert({
+          reseller_id: reseller.id,
+          customer_id: customerId,
           balance: 0,
           total_spent: 0,
         });
-
-      if (walletError) {
-        console.error("[Auth] Failed to create customer wallet:", walletError);
-      } else {
         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
       }
     }
 
-    // Check if this user is the store owner
+    // Check if store owner
     const { data: storeOwner } = await supabase
       .from("resellers")
       .select("auth_user_id")
