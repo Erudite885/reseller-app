@@ -57,7 +57,9 @@ jobs:
       - name: Get completed reseller configs
         id: configs
         run: |
-          CONFIGS=$(curl -s "${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}/rest/v1/reseller_app_configs?select=id,config&build_status=eq.completed" \
+          SUPABASE_URL="${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}"
+          SUPABASE_URL="${SUPABASE_URL%/}"
+          CONFIGS=$(curl -s "${SUPABASE_URL}/rest/v1/reseller_app_configs?select=id,config&build_status=eq.completed" \
             -H "apikey: ${{ secrets.BIMBO_SUPABASE_SECRET_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.BIMBO_SUPABASE_SECRET_KEY }}")
           echo "configs=$CONFIGS" >> $GITHUB_OUTPUT
