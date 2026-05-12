@@ -1,0 +1,67 @@
+name: OTA Update
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'hooks/**'
+      - 'store/**'
+      - 'constants/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'package.json'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to update'
+        required: true
+        default: 'main'
+      message:
+        description: 'Update message'
+        required: false
+        default: 'Manual OTA update'
+
+jobs:
+  ota-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Determine update branch
+        id: branch
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "channel=production" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "channel=staging" >> $GITHUB_OUTPUT
+          else
+            echo "channel=development" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish OTA Update
+        run: |
+          eas update --auto \
+            --channel ${{ steps.branch.outputs.channel }} \
+            --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
