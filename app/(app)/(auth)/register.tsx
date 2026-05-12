@@ -182,53 +182,66 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleRegister = async () => {
-    if (!validateForm()) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
+ const handleRegister = async () => {
+   if (!validateForm()) {
+     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+     return;
+   }
 
-    setIsLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+   setIsLoading(true);
+   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    try {
-      const {
-        data: { session, user },
-        error,
-      } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-      });
+   try {
+     // Generate store-specific email
+     const [localPart, domain] = formData.email.split("@");
+     const suffix = Math.floor(Math.random() * 9) + 1;
+     const separator = localPart.includes("+") ? "" : "+";
+     const storeSlug = useResellerStore.getState().config.storeName;
+     const storeEmail = `${localPart}${separator}${storeSlug}${suffix}@${domain}`;
 
-      if (error) throw error;
+     const username = formData.email.split("@")[0];
 
-      // Register customer to reseller immediately after signup
-      if (user) {
-        await registerCustomerToReseller(user.id);
-      }
+     const {
+       data: { session, user },
+       error,
+     } = await supabase.auth.signUp({
+       email: storeEmail,
+       password: formData.password,
+       options: {
+         data: {
+           username: username,
+           role: "customer",
+         },
+       },
+     });
 
-      if (session) {
-        setSession(session);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace("/(app)/(protected)");
-      } else {
-        // Email confirmation required
-        Alert.alert(
-          "Check Your Email",
-          "A confirmation email has been sent. Please verify your email to complete registration.",
-        );
-        router.replace("/(app)/(auth)/login");
-      }
-    } catch (error: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Registration Error",
-        error.message || "An error occurred during registration.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+     if (error) throw error;
+
+     if (user) {
+       await registerCustomerToReseller(user.id);
+     }
+
+     if (session) {
+       setSession(session);
+       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+       router.replace("/(app)/(protected)");
+     } else {
+       Alert.alert(
+         "Check Your Email",
+         "A confirmation email has been sent. Please verify your email to complete registration.",
+       );
+       router.replace("/(app)/(auth)/login");
+     }
+   } catch (error: any) {
+     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+     Alert.alert(
+       "Registration Error",
+       error.message || "An error occurred during registration.",
+     );
+   } finally {
+     setIsLoading(false);
+   }
+ };
 
   return (
     <>
