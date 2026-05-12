@@ -12,14 +12,18 @@ on:
       - 'store/**'
       - 'constants/**'
       - 'lib/**'
-      - 'assets/**'
       - 'package.json'
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to update'
+      store_name:
+        description: 'Store name to update'
         required: true
-        default: 'main'
+        type: string
+        default: 'reseller-data'
+      config_id:
+        description: 'Build Configuration ID'
+        required: true
+        type: string
       message:
         description: 'Update message'
         required: false
@@ -31,8 +35,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,20 +51,21 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Determine update branch
-        id: branch
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "channel=production" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
-            echo "channel=staging" >> $GITHUB_OUTPUT
-          else
-            echo "channel=development" >> $GITHUB_OUTPUT
-          fi
+      - name: Make scripts executable
+        run: chmod +x scripts/generate-reseller-assets.sh
+
+      - name: Generate reseller assets
+        run: bash scripts/generate-reseller-assets.sh
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_SECRET: ${{ secrets.API_SECRET_KEY }}
+          CONFIG_ID: ${{ github.event.inputs.config_id }}
 
       - name: Publish OTA Update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           eas update --auto \
             --platform android \
-            --channel ${{ steps.branch.outputs.channel }} \
+            --channel production \
             --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
