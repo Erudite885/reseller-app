@@ -81,7 +81,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   experiments: {
     typedRoutes: true,
   },
-
+  updates: {
+    url: "https://u.expo.dev/bde21e0b-dd38-48b3-a695-ec1b381c3890",
+    enabled: true,
+    checkAutomatically: "ON_LOAD",
+    fallbackToCacheTimeout: 0,
+  },
   runtimeVersion: {
     policy: "appVersion",
   },
