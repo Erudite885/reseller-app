@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import { View, Text, Pressable, FlatList, Dimensions } from "react-native";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getPlanColor } from "@/constants/helpers";
 import * as Haptics from "expo-haptics";
 
 const PLANS_PER_PAGE = 15;
@@ -73,8 +74,9 @@ export function PlanCarousel({
                 paddingHorizontal: Spacing.xs,
               }}
             >
-              {pagePlans.map((plan: Plan) => {
-                const isSelected: boolean = selectedPlanId === plan.plan_id;
+              {pagePlans.map((plan: Plan, index: number) => {
+                const planColor = getPlanColor(index);
+                const isSelected = selectedPlanId === plan.plan_id;
                 return (
                   <Pressable
                     key={`${plan.plan_id}-${plan.price}`}
@@ -82,43 +84,17 @@ export function PlanCarousel({
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       onSelectPlan(plan.plan_id);
                     }}
-                    style={{
+                    style={({ pressed }) => ({
                       width: "30%",
                       backgroundColor: isSelected
                         ? colors.primary
                         : colors.card,
-                      borderRadius: Radius.md,
+                      borderRadius: Radius.xs,
                       padding: Spacing.md,
-                      borderWidth: isSelected ? 0 : 1,
-                      borderColor: colors.border,
-                      ...shadows.sm,
-                    }}
+                      opacity: pressed ? 0.7 : 1,
+                      ...shadows.md,
+                    })}
                   >
-                    <View
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: Radius.full,
-                        borderWidth: 2,
-                        borderColor: isSelected ? "#FFFFFF" : colors.border,
-                        backgroundColor: isSelected ? "#FFFFFF" : "transparent",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: Spacing.sm,
-                      }}
-                    >
-                      {isSelected && (
-                        <View
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: Radius.full,
-                            backgroundColor: colors.primary,
-                          }}
-                        />
-                      )}
-                    </View>
-
                     <Text
                       style={{
                         fontSize: Typography.sizes.xs * 1.33,
@@ -126,7 +102,6 @@ export function PlanCarousel({
                         color: isSelected ? "#FFFFFF" : colors.text,
                         marginBottom: Spacing.xs / 2,
                       }}
-                      numberOfLines={1}
                     >
                       {plan.plan_name}
                     </Text>
@@ -135,7 +110,7 @@ export function PlanCarousel({
                       style={{
                         fontSize: Typography.sizes.sm,
                         fontWeight: Typography.weights.semibold,
-                        color: isSelected ? "#FFFFFF" : colors.primary,
+                        color: isSelected ? "#FFFFFF" : planColor,
                         marginBottom: Spacing.xs / 2,
                       }}
                     >
