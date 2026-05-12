@@ -1,4 +1,5 @@
 // app/(app)/(protected)/index.tsx (HOME SCREEN - WITH TOAST INTEGRATION)
+import { PlanCarousel } from "@/components/PlanCarousel";
 import { Button, Card, Input, Toast } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import {
@@ -1069,7 +1070,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Data Plan Selection Grid (Only for Data) */}
-        {serviceType === "data" && (
+        {/* {serviceType === "data" && (
           <View
             style={{ paddingHorizontal: Spacing.sm, marginBottom: Spacing.lg }}
           >
@@ -1210,6 +1211,135 @@ export default function HomeScreen() {
                       );
                     })}
                   </View>
+                ) : (
+                  <View
+                    style={{
+                      alignItems: "center",
+                      paddingVertical: Spacing.lg,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.base,
+                        color: colors.textSecondary,
+                      }}
+                    >
+                      No plans available
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: Radius.md,
+                  padding: Spacing.xl,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ fontSize: 48, marginBottom: Spacing.sm }}>
+                  📱
+                </Text>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.base,
+                    color: colors.textSecondary,
+                    textAlign: "center",
+                  }}
+                >
+                  Enter a phone number to see available plans
+                </Text>
+              </View>
+            )}
+          </View>
+        )} */}
+        {serviceType === "data" && (
+          <View
+            style={{ paddingHorizontal: Spacing.sm, marginBottom: Spacing.lg }}
+          >
+            <Text
+              style={{
+                fontSize: Typography.sizes.base,
+                fontWeight: Typography.weights.semibold,
+                color: colors.text,
+                marginBottom: Spacing.md,
+                paddingHorizontal: Spacing.lg,
+              }}
+            >
+              Select Data Plan
+            </Text>
+            {network ? (
+              <>
+                <View style={{ paddingHorizontal: Spacing.md }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: Spacing.md,
+                      backgroundColor: getNetworkColorLight(network),
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.sm,
+                      borderRadius: Radius.full,
+                      alignSelf: "flex-start",
+                    }}
+                  >
+                    {getNetworkImage(network.toLowerCase()) && (
+                      <Image
+                        source={getNetworkImage(network.toLowerCase())!}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: Radius.full,
+                          marginRight: Spacing.xs,
+                        }}
+                        resizeMode="contain"
+                      />
+                    )}
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.sm,
+                        fontWeight: Typography.weights.semibold,
+                        color: colors.primary,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {network} Plans
+                    </Text>
+                  </View>
+                </View>
+
+                {isDataPlansLoading ? (
+                  <View
+                    style={{
+                      alignItems: "center",
+                      paddingVertical: Spacing.lg,
+                    }}
+                  >
+                    <ActivityIndicator color={colors.primary} />
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.sm,
+                        color: colors.textSecondary,
+                        marginTop: Spacing.md,
+                      }}
+                    >
+                      Loading plans...
+                    </Text>
+                  </View>
+                ) : dataPlans.length > 0 ? (
+                  <PlanCarousel
+                    plans={dataPlans}
+                    selectedPlanId={selectedPlanId}
+                    onSelectPlan={(planId) => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setSelectedPlanId(planId);
+                    }}
+                    colors={colors}
+                    shadows={shadows}
+                  />
                 ) : (
                   <View
                     style={{
