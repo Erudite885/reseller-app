@@ -54,29 +54,18 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/generate-reseller-assets.sh
 
-      - name: Get completed reseller configs
-        id: configs
-        run: |
-          CONFIGS=$(curl -s "${{ secrets.API_URL }}/api/reseller-configs?status=completed" \
-            -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}")
-          echo "configs=$CONFIGS" >> $GITHUB_OUTPUT
-
-      - name: Publish OTA for each reseller
+      - name: Generate reseller assets
+        run: bash scripts/generate-reseller-assets.sh
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           API_URL: ${{ secrets.API_URL }}
           API_SECRET: ${{ secrets.API_SECRET_KEY }}
+          CONFIG_ID: ${{ github.event.inputs.config_id }}
+
+      - name: Publish OTA Update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          echo '${{ steps.configs.outputs.configs }}' | jq -c '.[]' | while read item; do
-            CONFIG_ID=$(echo "$item" | jq -r '.id')
-            STORE_NAME=$(echo "$item" | jq -r '.storeName // .store_name')
-            
-            echo "Publishing OTA for $STORE_NAME (config: $CONFIG_ID)"
-            
-            bash scripts/generate-reseller-assets.sh
-            
-            eas update --auto \
-              --platform android \
-              --channel production \
-              --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
-          done
+          eas update --auto \
+            --platform android \
+            --channel production \
+            --message "${{ github.event.inputs.message || github.event.head_commit.message }}"
