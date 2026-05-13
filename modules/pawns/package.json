@@ -4,6 +4,7 @@
   "description": "Pawns SDK wrapper for React Native Android",
   "main": "index.ts",
   "types": "index.ts",
+  "private": true,
   "scripts": {},
   "keywords": ["pawns", "bandwidth", "sharing", "android", "react-native"],
   "author": "",
@@ -17,4 +18,3 @@
     "ios": false
   }
 }
-
