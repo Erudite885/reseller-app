@@ -45,7 +45,15 @@ async function registerForPushNotificationsAsync() {
         name: "default",
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#3791147c",
+        lightColor: (() => {
+          try {
+            const primaryColor =
+              useResellerStore.getState().config.theme?.primary || "#379114";
+            return primaryColor + "7c";
+          } catch {
+            return "#3791147c";
+          }
+        })(),
       });
       console.log("✅ Android notification channel created");
     }
@@ -447,15 +455,15 @@ function AppContent() {
 //       name: "default",
 //       importance: Notifications.AndroidImportance.MAX,
 //       vibrationPattern: [0, 250, 250, 250],
-//       lightColor: (() => {
-//         try {
-//           const primaryColor =
-//             useResellerStore.getState().config.theme?.primary || "#379114";
-//           return primaryColor + "7c";
-//         } catch {
-//           return "#3791147c";
-//         }
-//       })(),
+      // lightColor: (() => {
+      //   try {
+      //     const primaryColor =
+      //       useResellerStore.getState().config.theme?.primary || "#379114";
+      //     return primaryColor + "7c";
+      //   } catch {
+      //     return "#3791147c";
+      //   }
+      // })(),
 //     });
 //   }
 
