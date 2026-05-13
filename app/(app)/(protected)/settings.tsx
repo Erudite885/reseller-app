@@ -22,6 +22,8 @@ import {
   Text,
   View,
 } from "react-native";
+import { BandwidthSettings } from "@/components/BandwidthSettings";
+
 
 type SettingItem = {
   id: string;
@@ -656,6 +658,24 @@ export default function SettingsScreen() {
             </View>
           </View>
         ))}
+
+        {/* Bandwidth Sharing Section - Added separately */}
+        <View style={{ marginTop: Spacing.md }}>
+          <Text
+            style={{
+              fontSize: Typography.sizes.sm,
+              fontWeight: "600",
+              color: colors.textSecondary,
+              paddingHorizontal: Spacing.lg,
+              paddingVertical: Spacing.sm,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
+            Bandwidth Sharing
+          </Text>
+          <BandwidthSettings />
+        </View>
 
         {/* Logout Button */}
         <Pressable
