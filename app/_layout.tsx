@@ -21,19 +21,19 @@ import { useResellerStore } from "@/store/resellerStore";
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
-// Configure notification handler - SIMPLIFIED
+// Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
-    shouldShowBanner: true, // Add this
+    shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
 // ============================================
-// Push Notification Registration - FIXED
+// Push Notification Registration
 // ============================================
 async function registerForPushNotificationsAsync() {
   try {
@@ -97,6 +97,61 @@ async function registerForPushNotificationsAsync() {
       error?.message || "Unknown error",
     );
     return null;
+  }
+}
+
+// ============================================
+// Check if Push Token Already Exists
+// ============================================
+async function hasExistingPushToken(userId: string): Promise<boolean> {
+  try {
+    const storeSlug = useResellerStore.getState().config.storeName;
+
+    // Check if user is a reseller
+    const { data: reseller } = await supabase
+      .from("resellers")
+      .select("push_token, notifications_enabled")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+
+    if (reseller) {
+      const hasToken = !!(
+        reseller.push_token && reseller.notifications_enabled
+      );
+      console.log(`🔍 Reseller push token exists: ${hasToken}`);
+      return hasToken;
+    }
+
+    // Check if user is a customer
+    const { data: resellerStore } = await supabase
+      .from("resellers")
+      .select("id")
+      .eq("store_name", storeSlug)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (resellerStore) {
+      const { data: customer } = await supabase
+        .from("reseller_customers")
+        .select("push_token, notifications_enabled")
+        .eq("auth_user_id", userId)
+        .eq("reseller_id", resellerStore.id)
+        .maybeSingle();
+
+      if (customer) {
+        const hasToken = !!(
+          customer.push_token && customer.notifications_enabled
+        );
+        console.log(`🔍 Customer push token exists: ${hasToken}`);
+        return hasToken;
+      }
+    }
+
+    console.log("🔍 No push token found for user");
+    return false;
+  } catch (error) {
+    console.error("Error checking push token:", error);
+    return false;
   }
 }
 
@@ -273,7 +328,6 @@ function AppContent() {
   const { user, setSession } = useAuthStore();
   const router = useRouter();
   const realtimeSubscriptionRef = useRef<any>(null);
-  const pushTokenRegistered = useRef(false);
 
   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
   useEffect(() => {
@@ -292,7 +346,7 @@ function AppContent() {
           setSession(session);
         }
 
-        if (session?.user && !pushTokenRegistered.current) {
+        if (session?.user) {
           console.log("👤 User found:", session.user.email);
 
           // Setup customer/reseller records
@@ -301,12 +355,20 @@ function AppContent() {
             session.user.email || "",
           );
 
-          // Register for push notifications (silently fails if error)
-          const token = await registerForPushNotificationsAsync();
-          if (token) {
-            await savePushTokenToDatabase(token, session.user.id);
-            pushTokenRegistered.current = true;
+          // ✅ Check if push token already exists before registering
+          const hasToken = await hasExistingPushToken(session.user.id);
+
+          if (!hasToken) {
+            console.log("📱 No existing push token, registering...");
+            const token = await registerForPushNotificationsAsync();
+            if (token) {
+              await savePushTokenToDatabase(token, session.user.id);
+            }
+          } else {
+            console.log("✅ Push token already exists - skipping registration");
           }
+        } else {
+          console.log("👤 No user session found");
         }
       } catch (error) {
         console.error("Error initializing app:", error);
@@ -326,20 +388,32 @@ function AppContent() {
       console.log(`Auth state changed: ${event}`);
       setSession(session);
 
-      if (
-        event === "SIGNED_IN" &&
-        session?.user &&
-        !pushTokenRegistered.current
-      ) {
+      if (event === "SIGNED_IN" && session?.user) {
+        console.log("👤 User signed in:", session.user.email);
+
+        // Setup customer/reseller records
         await setupCustomerForReseller(
           session.user.id,
           session.user.email || "",
         );
-        const token = await registerForPushNotificationsAsync();
-        if (token) {
-          await savePushTokenToDatabase(token, session.user.id);
-          pushTokenRegistered.current = true;
+
+        // ✅ Check if push token already exists on sign in
+        const hasToken = await hasExistingPushToken(session.user.id);
+
+        if (!hasToken) {
+          console.log("📱 No existing push token on sign in, registering...");
+          const token = await registerForPushNotificationsAsync();
+          if (token) {
+            await savePushTokenToDatabase(token, session.user.id);
+          }
+        } else {
+          console.log("✅ Push token already exists - skipping registration");
         }
+      } else if (event === "SIGNED_OUT") {
+        console.log("👋 User signed out");
+        // Clean up realtime subscription on sign out
+        realtimeSubscriptionRef.current?.unsubscribe();
+        realtimeSubscriptionRef.current = null;
       }
     });
 
@@ -356,6 +430,8 @@ function AppContent() {
       realtimeSubscriptionRef.current = null;
       return;
     }
+
+    console.log("📡 Setting up realtime notifications for user:", user.id);
 
     const channel = supabase
       .channel(`notifications:${user.id}`)
@@ -378,21 +454,24 @@ function AppContent() {
     realtimeSubscriptionRef.current = channel;
 
     return () => {
+      console.log("🧹 Cleaning up realtime subscription");
       channel.unsubscribe();
       realtimeSubscriptionRef.current = null;
     };
   }, [user?.id]);
 
-  // ─── Notification Listeners ───────────────────────────────────────────
+  // ─── Push Notification Listeners ───────────────────────────────────────
   useEffect(() => {
     const notificationListener = Notifications.addNotificationReceivedListener(
       () => {
+        console.log("📬 Foreground notification received");
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       },
     );
 
     const responseListener =
       Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log("👆 Notification tapped");
         const data = response.notification.request.content.data;
         const route = data?.route || "/(app)/(protected)/notifications";
         router.push(route as any);
@@ -435,71 +514,81 @@ function AppContent() {
 // // Prevent splash screen from auto-hiding
 // SplashScreen.preventAutoHideAsync();
 
-// // Configure notification handler
+// // Configure notification handler - SIMPLIFIED
 // Notifications.setNotificationHandler({
 //   handleNotification: async () => ({
-//     shouldShowBanner: true,
+//     shouldShowAlert: true,
 //     shouldPlaySound: true,
-//     shouldSetBadge: true,
+//     shouldSetBadge: false,
+//     shouldShowBanner: true, // Add this
 //     shouldShowList: true,
 //   }),
 // });
 
 // // ============================================
-// // Push Notification Registration
+// // Push Notification Registration - FIXED
 // // ============================================
 // async function registerForPushNotificationsAsync() {
-//   // Set up Android notification channel
-//   if (Platform.OS === "android") {
-//     await Notifications.setNotificationChannelAsync("default", {
-//       name: "default",
-//       importance: Notifications.AndroidImportance.MAX,
-//       vibrationPattern: [0, 250, 250, 250],
-      // lightColor: (() => {
-      //   try {
-      //     const primaryColor =
-      //       useResellerStore.getState().config.theme?.primary || "#379114";
-      //     return primaryColor + "7c";
-      //   } catch {
-      //     return "#3791147c";
-      //   }
-      // })(),
-//     });
-//   }
-
-//   // Must use physical device for push notifications
-//   if (!Device.isDevice) {
-//     console.log("⚠️ Must use physical device for Push Notifications");
-//     return null;
-//   }
-
-//   // Check/request permissions
-//   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-//   let finalStatus = existingStatus;
-
-//   if (existingStatus !== "granted") {
-//     const { status } = await Notifications.requestPermissionsAsync();
-//     finalStatus = status;
-//   }
-
-//   if (finalStatus !== "granted") {
-//     console.log("❌ Failed to get push token - permission denied");
-//     return null;
-//   }
-
-//   // Get Expo push token (no Firebase needed)
 //   try {
-//     const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
-//     const token = (
-//       await Notifications.getExpoPushTokenAsync(
-//         projectId ? { projectId } : undefined,
-//       )
-//     ).data;
+//     console.log("📱 Starting push notification registration...");
 
-//     console.log("✅ Push token obtained:", token.substring(0, 20) + "...");
+//     // Set up Android notification channel
+//     if (Platform.OS === "android") {
+//       await Notifications.setNotificationChannelAsync("default", {
+//         name: "default",
+//         importance: Notifications.AndroidImportance.MAX,
+//         vibrationPattern: [0, 250, 250, 250],
+//         lightColor: (() => {
+//           try {
+//             const primaryColor =
+//               useResellerStore.getState().config.theme?.primary || "#379114";
+//             return primaryColor + "7c";
+//           } catch {
+//             return "#3791147c";
+//           }
+//         })(),
+//       });
+//       console.log("✅ Android notification channel created");
+//     }
+
+//     // Check if it's a physical device
+//     if (!Device.isDevice) {
+//       console.log("⚠️ Physical device required for push notifications");
+//       return null;
+//     }
+
+//     // Check/request permissions
+//     const { status: existingStatus } =
+//       await Notifications.getPermissionsAsync();
+//     let finalStatus = existingStatus;
+
+//     if (existingStatus !== "granted") {
+//       const { status } = await Notifications.requestPermissionsAsync();
+//       finalStatus = status;
+//     }
+
+//     if (finalStatus !== "granted") {
+//       console.log("❌ Notification permission denied");
+//       return null;
+//     }
+
+//     console.log("✅ Notification permission granted");
+
+//     // Get Expo push token - Use the project ID from app.config.ts
+//     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
+
+//     const { data: token } = await Notifications.getExpoPushTokenAsync({
+//       projectId: projectId,
+//     });
+
+//     console.log("✅ Expo push token obtained successfully");
 //     return token;
-//   } catch (error) {
-//     console.error("❌ Failed to get push token:", error);
+//   } catch (error: any) {
+//     // This catches the Firebase error and ignores it
+//     console.log(
+//       "⚠️ Push notification error (safe to ignore):",
+//       error?.message || "Unknown error",
+//     );
 //     return null;
 //   }
 // }
@@ -510,13 +599,14 @@ function AppContent() {
 // async function savePushTokenToDatabase(token: string, userId: string) {
 //   try {
 //     const storeSlug = useResellerStore.getState().config.storeName;
+//     console.log("💾 Saving push token to database for user:", userId);
 
-//     // Check if user is a reseller
+//     // Try to save as reseller first
 //     const { data: reseller } = await supabase
 //       .from("resellers")
 //       .select("id")
 //       .eq("auth_user_id", userId)
-//       .single();
+//       .maybeSingle();
 
 //     if (reseller) {
 //       const { error } = await supabase
@@ -528,18 +618,19 @@ function AppContent() {
 //         })
 //         .eq("id", reseller.id);
 
-//       if (error) throw error;
-//       console.log("✅ Push token saved for reseller:", storeSlug);
-//       return;
+//       if (!error) {
+//         console.log("✅ Push token saved for reseller");
+//         return true;
+//       }
 //     }
 
-//     // Check if user is a customer of the current reseller
+//     // Try to save as customer
 //     const { data: resellerStore } = await supabase
 //       .from("resellers")
 //       .select("id")
 //       .eq("store_name", storeSlug)
 //       .eq("status", "active")
-//       .single();
+//       .maybeSingle();
 
 //     if (resellerStore) {
 //       const { data: customer } = await supabase
@@ -547,7 +638,7 @@ function AppContent() {
 //         .select("id")
 //         .eq("auth_user_id", userId)
 //         .eq("reseller_id", resellerStore.id)
-//         .single();
+//         .maybeSingle();
 
 //       if (customer) {
 //         const { error } = await supabase
@@ -558,78 +649,17 @@ function AppContent() {
 //           })
 //           .eq("id", customer.id);
 
-//         if (error) throw error;
-//         console.log("✅ Push token saved for customer of:", storeSlug);
-//         return;
+//         if (!error) {
+//           console.log("✅ Push token saved for customer");
+//           return true;
+//         }
 //       }
 //     }
 
-//     // Fallback: Save to profiles table
-//     const { error } = await supabase
-//       .from("profiles")
-//       .update({
-//         push_token: token,
-//         notifications_enabled: true,
-//         updated_at: new Date().toISOString(),
-//       })
-//       .eq("id", userId);
-
-//     if (error) throw error;
-//     console.log("✅ Push token saved to profiles");
+//     console.log("⚠️ Could not save push token - no matching profile");
+//     return false;
 //   } catch (error) {
 //     console.error("❌ Error saving push token:", error);
-//   }
-// }
-
-// // ============================================
-// // Check if Push Token Already Exists
-// // ============================================
-// async function hasExistingPushToken(userId: string): Promise<boolean> {
-//   try {
-//     const storeSlug = useResellerStore.getState().config.storeName;
-
-//     // Check reseller
-//     const { data: reseller } = await supabase
-//       .from("resellers")
-//       .select("push_token, notifications_enabled")
-//       .eq("auth_user_id", userId)
-//       .single();
-
-//     if (reseller) {
-//       return !!(reseller.push_token && reseller.notifications_enabled);
-//     }
-
-//     // Check customer
-//     const { data: resellerStore } = await supabase
-//       .from("resellers")
-//       .select("id")
-//       .eq("store_name", storeSlug)
-//       .eq("status", "active")
-//       .single();
-
-//     if (resellerStore) {
-//       const { data: customer } = await supabase
-//         .from("reseller_customers")
-//         .select("push_token, notifications_enabled")
-//         .eq("auth_user_id", userId)
-//         .eq("reseller_id", resellerStore.id)
-//         .single();
-
-//       if (customer) {
-//         return !!(customer.push_token && customer.notifications_enabled);
-//       }
-//     }
-
-//     // Check profiles fallback
-//     const { data: profile } = await supabase
-//       .from("profiles")
-//       .select("push_token, notifications_enabled")
-//       .eq("id", userId)
-//       .single();
-
-//     return !!(profile?.push_token && profile?.notifications_enabled);
-//   } catch (error) {
-//     console.error("Error checking push token:", error);
 //     return false;
 //   }
 // }
@@ -637,114 +667,30 @@ function AppContent() {
 // // ============================================
 // // Setup Customer for Reseller
 // // ============================================
-// // async function setupCustomerForReseller(userId: string, userEmail: string) {
-// //   try {
-// //     const storeSlug = useResellerStore.getState().config.storeName;
-
-// //     // Find the reseller by store name
-// //     const { data: reseller, error: resellerError } = await supabase
-// //       .from("resellers")
-// //       .select("id, store_name")
-// //       .eq("store_name", storeSlug)
-// //       .eq("status", "active")
-// //       .single();
-
-// //     if (resellerError || !reseller) {
-// //       console.log("[Auth] No active reseller found for store:", storeSlug);
-// //       return;
-// //     }
-
-// //     // Upsert customer record (scoped to this reseller)
-// //     const { error: customerError } = await supabase
-// //       .from("reseller_customers")
-// //       .upsert(
-// //         {
-// //           reseller_id: reseller.id,
-// //           email: userEmail,
-// //           auth_user_id: userId,
-// //         },
-// //         {
-// //           onConflict: "reseller_id,email",
-// //           ignoreDuplicates: true,
-// //         },
-// //       );
-
-// //     if (customerError) {
-// //       console.error("[Auth] Failed to upsert customer:", customerError);
-// //       return;
-// //     }
-
-// //     // Create wallet if it doesn't exist
-// //     const { data: existingWallet, error: walletQueryError } = await supabase
-// //       .from("reseller_customer_wallets")
-// //       .select("id")
-// //       .eq("reseller_id", reseller.id)
-// //       .eq("customer_id", userId)
-// //       .single();
-
-// //     if (walletQueryError && walletQueryError.code !== "PGRST116") {
-// //       console.error("[Auth] Error checking wallet:", walletQueryError);
-// //     }
-
-// //     if (!existingWallet) {
-// //       const { error: walletError } = await supabase
-// //         .from("reseller_customer_wallets")
-// //         .insert({
-// //           reseller_id: reseller.id,
-// //           customer_id: userId,
-// //           balance: 0,
-// //           total_spent: 0,
-// //         });
-
-// //       if (walletError) {
-// //         console.error("[Auth] Failed to create customer wallet:", walletError);
-// //       } else {
-// //         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
-// //       }
-// //     }
-
-// //     // Check if this user is the store owner
-// //     const { data: storeOwner } = await supabase
-// //       .from("resellers")
-// //       .select("auth_user_id")
-// //       .eq("store_name", storeSlug)
-// //       .eq("auth_user_id", userId)
-// //       .single();
-
-// //     if (storeOwner) {
-// //       console.log("[Auth] 👑 Store owner logged in:", storeSlug);
-// //     } else {
-// //       console.log("[Auth] 👤 Customer logged in:", userEmail);
-// //     }
-// //   } catch (error) {
-// //     console.error("[Auth] ❌ Error setting up customer:", error);
-// //   }
-// // }
-
 // async function setupCustomerForReseller(userId: string, userEmail: string) {
 //   try {
 //     const storeSlug = useResellerStore.getState().config.storeName;
 //     const username = userEmail.split("@")[0];
 
-//     const { data: reseller, error: resellerError } = await supabase
+//     const { data: reseller } = await supabase
 //       .from("resellers")
 //       .select("id, store_name")
 //       .eq("store_name", storeSlug)
 //       .eq("status", "active")
-//       .single();
+//       .maybeSingle();
 
-//     if (resellerError || !reseller) {
+//     if (!reseller) {
 //       console.log("[Auth] No active reseller found for store:", storeSlug);
 //       return;
 //     }
 
-//     // Check if customer exists for this reseller
+//     // Check if customer exists
 //     const { data: existingCustomer } = await supabase
 //       .from("reseller_customers")
 //       .select("id, auth_user_id")
 //       .eq("reseller_id", reseller.id)
 //       .eq("email", userEmail)
-//       .single();
+//       .maybeSingle();
 
 //     let customerId: string | null = null;
 
@@ -766,19 +712,19 @@ function AppContent() {
 //           auth_user_id: userId,
 //         })
 //         .select("id")
-//         .single();
+//         .maybeSingle();
 
 //       if (newCustomer) customerId = newCustomer.id;
 //     }
 
-//     // Create wallet using reseller_customers.id
+//     // Create wallet if needed
 //     if (customerId) {
 //       const { data: existingWallet } = await supabase
 //         .from("reseller_customer_wallets")
 //         .select("id")
 //         .eq("reseller_id", reseller.id)
 //         .eq("customer_id", customerId)
-//         .single();
+//         .maybeSingle();
 
 //       if (!existingWallet) {
 //         await supabase.from("reseller_customer_wallets").insert({
@@ -787,25 +733,13 @@ function AppContent() {
 //           balance: 0,
 //           total_spent: 0,
 //         });
-//         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
+//         console.log("[Auth] ✅ Customer wallet created");
 //       }
 //     }
 
-//     // Check if store owner
-//     const { data: storeOwner } = await supabase
-//       .from("resellers")
-//       .select("auth_user_id")
-//       .eq("store_name", storeSlug)
-//       .eq("auth_user_id", userId)
-//       .single();
-
-//     if (storeOwner) {
-//       console.log("[Auth] 👑 Store owner logged in:", storeSlug);
-//     } else {
-//       console.log("[Auth] 👤 Customer logged in:", userEmail);
-//     }
+//     console.log("[Auth] ✅ Customer setup complete");
 //   } catch (error) {
-//     console.error("[Auth] ❌ Error setting up customer:", error);
+//     console.error("[Auth] Error setting up customer:", error);
 //   }
 // }
 
@@ -832,6 +766,7 @@ function AppContent() {
 //   const { user, setSession } = useAuthStore();
 //   const router = useRouter();
 //   const realtimeSubscriptionRef = useRef<any>(null);
+//   const pushTokenRegistered = useRef(false);
 
 //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
 //   useEffect(() => {
@@ -850,8 +785,8 @@ function AppContent() {
 //           setSession(session);
 //         }
 
-//         if (session?.user) {
-//           console.log("👤 User session found:", session.user.email);
+//         if (session?.user && !pushTokenRegistered.current) {
+//           console.log("👤 User found:", session.user.email);
 
 //           // Setup customer/reseller records
 //           await setupCustomerForReseller(
@@ -859,27 +794,18 @@ function AppContent() {
 //             session.user.email || "",
 //           );
 
-//           // Check if push token already exists
-//           const hasToken = await hasExistingPushToken(session.user.id);
-
-//           if (!hasToken) {
-//             console.log("📱 No existing push token, registering...");
-//             const token = await registerForPushNotificationsAsync();
-//             if (token) {
-//               await savePushTokenToDatabase(token, session.user.id);
-//             }
-//           } else {
-//             console.log("✅ Push token already exists");
+//           // Register for push notifications (silently fails if error)
+//           const token = await registerForPushNotificationsAsync();
+//           if (token) {
+//             await savePushTokenToDatabase(token, session.user.id);
+//             pushTokenRegistered.current = true;
 //           }
-//         } else {
-//           console.log("👤 No user session found");
 //         }
 //       } catch (error) {
-//         console.error("❌ Error initializing app:", error);
+//         console.error("Error initializing app:", error);
 //       } finally {
 //         if (mounted) {
 //           await SplashScreen.hideAsync();
-//           console.log("🎉 App initialized successfully");
 //         }
 //       }
 //     }
@@ -890,29 +816,23 @@ function AppContent() {
 //     const {
 //       data: { subscription },
 //     } = supabase.auth.onAuthStateChange(async (event, session) => {
-//       console.log(`🔄 Auth state changed: ${event}`);
-
+//       console.log(`Auth state changed: ${event}`);
 //       setSession(session);
 
-//       if (event === "SIGNED_IN" && session?.user) {
-//         console.log("👤 User signed in:", session.user.email);
-
-//         // Setup customer/reseller records
+//       if (
+//         event === "SIGNED_IN" &&
+//         session?.user &&
+//         !pushTokenRegistered.current
+//       ) {
 //         await setupCustomerForReseller(
 //           session.user.id,
 //           session.user.email || "",
 //         );
-
-//         // Register for push notifications on sign in
 //         const token = await registerForPushNotificationsAsync();
 //         if (token) {
 //           await savePushTokenToDatabase(token, session.user.id);
+//           pushTokenRegistered.current = true;
 //         }
-//       } else if (event === "SIGNED_OUT") {
-//         console.log("👋 User signed out");
-//         // Clean up realtime subscription on sign out
-//         realtimeSubscriptionRef.current?.unsubscribe();
-//         realtimeSubscriptionRef.current = null;
 //       }
 //     });
 
@@ -925,28 +845,17 @@ function AppContent() {
 //   // ─── Realtime Subscription for Notifications ───────────────────────────
 //   useEffect(() => {
 //     if (!user?.id) {
-//       // Clean up subscription if user logs out
 //       realtimeSubscriptionRef.current?.unsubscribe();
 //       realtimeSubscriptionRef.current = null;
 //       return;
 //     }
 
-//     console.log("📡 Setting up realtime notifications for user:", user.id);
-
-//     // Create realtime subscription for both notification tables
 //     const channel = supabase
 //       .channel(`notifications:${user.id}`)
 //       .on(
 //         "postgres_changes",
-//         {
-//           event: "*",
-//           schema: "public",
-//           table: "reseller_notifications",
-//         },
-//         (payload) => {
-//           console.log("📬 New reseller notification:", payload.eventType);
-//           queryClient.invalidateQueries({ queryKey: ["notifications"] });
-//         },
+//         { event: "*", schema: "public", table: "reseller_notifications" },
+//         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
 //       )
 //       .on(
 //         "postgres_changes",
@@ -955,84 +864,38 @@ function AppContent() {
 //           schema: "public",
 //           table: "reseller_customer_notifications",
 //         },
-//         (payload) => {
-//           console.log("📬 New customer notification:", payload.eventType);
-//           queryClient.invalidateQueries({ queryKey: ["notifications"] });
-//         },
+//         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
 //       )
-//       .subscribe((status) => {
-//         console.log("📡 Realtime subscription status:", status);
-//       });
+//       .subscribe();
 
 //     realtimeSubscriptionRef.current = channel;
 
 //     return () => {
-//       console.log("🧹 Cleaning up realtime subscription");
 //       channel.unsubscribe();
 //       realtimeSubscriptionRef.current = null;
 //     };
 //   }, [user?.id]);
 
-//   // ─── Push Notification Listeners ───────────────────────────────────────
+//   // ─── Notification Listeners ───────────────────────────────────────────
 //   useEffect(() => {
-//     // Handle notifications received while app is in foreground
 //     const notificationListener = Notifications.addNotificationReceivedListener(
-//       (notification) => {
-//         console.log(
-//           "📬 Foreground notification received:",
-//           notification.request.identifier,
-//         );
-//         // Invalidate notifications query to refresh the list
+//       () => {
 //         queryClient.invalidateQueries({ queryKey: ["notifications"] });
 //       },
 //     );
 
-//     // Handle notification taps (when user taps on notification)
 //     const responseListener =
 //       Notifications.addNotificationResponseReceivedListener((response) => {
-//         console.log(
-//           "👆 Notification tapped:",
-//           response.notification.request.identifier,
-//         );
-
 //         const data = response.notification.request.content.data;
 //         const route = data?.route || "/(app)/(protected)/notifications";
-
-//         // Mark notification as read in database
-//         if (data?.notificationId) {
-//           // Try both tables
-//           supabase
-//             .from("reseller_notifications")
-//             .update({ is_read: true })
-//             .eq("id", data.notificationId)
-//             .then(({ error }) => {
-//               if (error)
-//                 console.error("Error marking notification as read:", error);
-//             });
-
-//           supabase
-//             .from("reseller_customer_notifications")
-//             .update({ is_read: true })
-//             .eq("id", data.notificationId)
-//             .then(({ error }) => {
-//               if (error)
-//                 console.error("Error marking notification as read:", error);
-//             });
-
-//           // Invalidate notifications query
-//           queryClient.invalidateQueries({ queryKey: ["notifications"] });
-//         }
-
-//         // Navigate to the specified route
 //         router.push(route as any);
 //       });
 
 //     return () => {
-//       console.log("🧹 Cleaning up notification listeners");
 //       notificationListener.remove();
 //       responseListener.remove();
 //     };
-//   }, [user?.id]);
+//   }, []);
 
 //   return (
 //     <>
@@ -1041,3 +904,633 @@ function AppContent() {
 //     </>
 //   );
 // }
+
+// // // app/_layout.tsx
+
+// // import { Slot } from "expo-router";
+// // import { StatusBar } from "expo-status-bar";
+// // import { QueryClientProvider } from "@tanstack/react-query";
+// // import { GestureHandlerRootView } from "react-native-gesture-handler";
+// // import { SafeAreaProvider } from "react-native-safe-area-context";
+// // import * as SplashScreen from "expo-splash-screen";
+// // import * as Notifications from "expo-notifications";
+// // import * as Device from "expo-device";
+// // import { useEffect, useRef } from "react";
+// // import { Platform } from "react-native";
+// // import { useRouter } from "expo-router";
+
+// // import { queryClient } from "@/lib/queryClient";
+// // import { useTheme } from "@/hooks/useTheme";
+// // import { supabase } from "@/lib/supabase";
+// // import { useAuthStore } from "@/store/auth.store";
+// // import { useResellerStore } from "@/store/resellerStore";
+
+// // // Prevent splash screen from auto-hiding
+// // SplashScreen.preventAutoHideAsync();
+
+// // // Configure notification handler
+// // Notifications.setNotificationHandler({
+// //   handleNotification: async () => ({
+// //     shouldShowBanner: true,
+// //     shouldPlaySound: true,
+// //     shouldSetBadge: true,
+// //     shouldShowList: true,
+// //   }),
+// // });
+
+// // // ============================================
+// // // Push Notification Registration
+// // // ============================================
+// // async function registerForPushNotificationsAsync() {
+// //   // Set up Android notification channel
+// //   if (Platform.OS === "android") {
+// //     await Notifications.setNotificationChannelAsync("default", {
+// //       name: "default",
+// //       importance: Notifications.AndroidImportance.MAX,
+// //       vibrationPattern: [0, 250, 250, 250],
+//       // lightColor: (() => {
+//       //   try {
+//       //     const primaryColor =
+//       //       useResellerStore.getState().config.theme?.primary || "#379114";
+//       //     return primaryColor + "7c";
+//       //   } catch {
+//       //     return "#3791147c";
+//       //   }
+//       // })(),
+// //     });
+// //   }
+
+// //   // Must use physical device for push notifications
+// //   if (!Device.isDevice) {
+// //     console.log("⚠️ Must use physical device for Push Notifications");
+// //     return null;
+// //   }
+
+// //   // Check/request permissions
+// //   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+// //   let finalStatus = existingStatus;
+
+// //   if (existingStatus !== "granted") {
+// //     const { status } = await Notifications.requestPermissionsAsync();
+// //     finalStatus = status;
+// //   }
+
+// //   if (finalStatus !== "granted") {
+// //     console.log("❌ Failed to get push token - permission denied");
+// //     return null;
+// //   }
+
+// //   // Get Expo push token (no Firebase needed)
+// //   try {
+// //     const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
+// //     const token = (
+// //       await Notifications.getExpoPushTokenAsync(
+// //         projectId ? { projectId } : undefined,
+// //       )
+// //     ).data;
+
+// //     console.log("✅ Push token obtained:", token.substring(0, 20) + "...");
+// //     return token;
+// //   } catch (error) {
+// //     console.error("❌ Failed to get push token:", error);
+// //     return null;
+// //   }
+// // }
+
+// // // ============================================
+// // // Save Push Token to Database
+// // // ============================================
+// // async function savePushTokenToDatabase(token: string, userId: string) {
+// //   try {
+// //     const storeSlug = useResellerStore.getState().config.storeName;
+
+// //     // Check if user is a reseller
+// //     const { data: reseller } = await supabase
+// //       .from("resellers")
+// //       .select("id")
+// //       .eq("auth_user_id", userId)
+// //       .single();
+
+// //     if (reseller) {
+// //       const { error } = await supabase
+// //         .from("resellers")
+// //         .update({
+// //           push_token: token,
+// //           notifications_enabled: true,
+// //           updated_at: new Date().toISOString(),
+// //         })
+// //         .eq("id", reseller.id);
+
+// //       if (error) throw error;
+// //       console.log("✅ Push token saved for reseller:", storeSlug);
+// //       return;
+// //     }
+
+// //     // Check if user is a customer of the current reseller
+// //     const { data: resellerStore } = await supabase
+// //       .from("resellers")
+// //       .select("id")
+// //       .eq("store_name", storeSlug)
+// //       .eq("status", "active")
+// //       .single();
+
+// //     if (resellerStore) {
+// //       const { data: customer } = await supabase
+// //         .from("reseller_customers")
+// //         .select("id")
+// //         .eq("auth_user_id", userId)
+// //         .eq("reseller_id", resellerStore.id)
+// //         .single();
+
+// //       if (customer) {
+// //         const { error } = await supabase
+// //           .from("reseller_customers")
+// //           .update({
+// //             push_token: token,
+// //             notifications_enabled: true,
+// //           })
+// //           .eq("id", customer.id);
+
+// //         if (error) throw error;
+// //         console.log("✅ Push token saved for customer of:", storeSlug);
+// //         return;
+// //       }
+// //     }
+
+// //     // Fallback: Save to profiles table
+// //     const { error } = await supabase
+// //       .from("profiles")
+// //       .update({
+// //         push_token: token,
+// //         notifications_enabled: true,
+// //         updated_at: new Date().toISOString(),
+// //       })
+// //       .eq("id", userId);
+
+// //     if (error) throw error;
+// //     console.log("✅ Push token saved to profiles");
+// //   } catch (error) {
+// //     console.error("❌ Error saving push token:", error);
+// //   }
+// // }
+
+// // // ============================================
+// // // Check if Push Token Already Exists
+// // // ============================================
+// // async function hasExistingPushToken(userId: string): Promise<boolean> {
+// //   try {
+// //     const storeSlug = useResellerStore.getState().config.storeName;
+
+// //     // Check reseller
+// //     const { data: reseller } = await supabase
+// //       .from("resellers")
+// //       .select("push_token, notifications_enabled")
+// //       .eq("auth_user_id", userId)
+// //       .single();
+
+// //     if (reseller) {
+// //       return !!(reseller.push_token && reseller.notifications_enabled);
+// //     }
+
+// //     // Check customer
+// //     const { data: resellerStore } = await supabase
+// //       .from("resellers")
+// //       .select("id")
+// //       .eq("store_name", storeSlug)
+// //       .eq("status", "active")
+// //       .single();
+
+// //     if (resellerStore) {
+// //       const { data: customer } = await supabase
+// //         .from("reseller_customers")
+// //         .select("push_token, notifications_enabled")
+// //         .eq("auth_user_id", userId)
+// //         .eq("reseller_id", resellerStore.id)
+// //         .single();
+
+// //       if (customer) {
+// //         return !!(customer.push_token && customer.notifications_enabled);
+// //       }
+// //     }
+
+// //     // Check profiles fallback
+// //     const { data: profile } = await supabase
+// //       .from("profiles")
+// //       .select("push_token, notifications_enabled")
+// //       .eq("id", userId)
+// //       .single();
+
+// //     return !!(profile?.push_token && profile?.notifications_enabled);
+// //   } catch (error) {
+// //     console.error("Error checking push token:", error);
+// //     return false;
+// //   }
+// // }
+
+// // // ============================================
+// // // Setup Customer for Reseller
+// // // ============================================
+// // // async function setupCustomerForReseller(userId: string, userEmail: string) {
+// // //   try {
+// // //     const storeSlug = useResellerStore.getState().config.storeName;
+
+// // //     // Find the reseller by store name
+// // //     const { data: reseller, error: resellerError } = await supabase
+// // //       .from("resellers")
+// // //       .select("id, store_name")
+// // //       .eq("store_name", storeSlug)
+// // //       .eq("status", "active")
+// // //       .single();
+
+// // //     if (resellerError || !reseller) {
+// // //       console.log("[Auth] No active reseller found for store:", storeSlug);
+// // //       return;
+// // //     }
+
+// // //     // Upsert customer record (scoped to this reseller)
+// // //     const { error: customerError } = await supabase
+// // //       .from("reseller_customers")
+// // //       .upsert(
+// // //         {
+// // //           reseller_id: reseller.id,
+// // //           email: userEmail,
+// // //           auth_user_id: userId,
+// // //         },
+// // //         {
+// // //           onConflict: "reseller_id,email",
+// // //           ignoreDuplicates: true,
+// // //         },
+// // //       );
+
+// // //     if (customerError) {
+// // //       console.error("[Auth] Failed to upsert customer:", customerError);
+// // //       return;
+// // //     }
+
+// // //     // Create wallet if it doesn't exist
+// // //     const { data: existingWallet, error: walletQueryError } = await supabase
+// // //       .from("reseller_customer_wallets")
+// // //       .select("id")
+// // //       .eq("reseller_id", reseller.id)
+// // //       .eq("customer_id", userId)
+// // //       .single();
+
+// // //     if (walletQueryError && walletQueryError.code !== "PGRST116") {
+// // //       console.error("[Auth] Error checking wallet:", walletQueryError);
+// // //     }
+
+// // //     if (!existingWallet) {
+// // //       const { error: walletError } = await supabase
+// // //         .from("reseller_customer_wallets")
+// // //         .insert({
+// // //           reseller_id: reseller.id,
+// // //           customer_id: userId,
+// // //           balance: 0,
+// // //           total_spent: 0,
+// // //         });
+
+// // //       if (walletError) {
+// // //         console.error("[Auth] Failed to create customer wallet:", walletError);
+// // //       } else {
+// // //         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
+// // //       }
+// // //     }
+
+// // //     // Check if this user is the store owner
+// // //     const { data: storeOwner } = await supabase
+// // //       .from("resellers")
+// // //       .select("auth_user_id")
+// // //       .eq("store_name", storeSlug)
+// // //       .eq("auth_user_id", userId)
+// // //       .single();
+
+// // //     if (storeOwner) {
+// // //       console.log("[Auth] 👑 Store owner logged in:", storeSlug);
+// // //     } else {
+// // //       console.log("[Auth] 👤 Customer logged in:", userEmail);
+// // //     }
+// // //   } catch (error) {
+// // //     console.error("[Auth] ❌ Error setting up customer:", error);
+// // //   }
+// // // }
+
+// // async function setupCustomerForReseller(userId: string, userEmail: string) {
+// //   try {
+// //     const storeSlug = useResellerStore.getState().config.storeName;
+// //     const username = userEmail.split("@")[0];
+
+// //     const { data: reseller, error: resellerError } = await supabase
+// //       .from("resellers")
+// //       .select("id, store_name")
+// //       .eq("store_name", storeSlug)
+// //       .eq("status", "active")
+// //       .single();
+
+// //     if (resellerError || !reseller) {
+// //       console.log("[Auth] No active reseller found for store:", storeSlug);
+// //       return;
+// //     }
+
+// //     // Check if customer exists for this reseller
+// //     const { data: existingCustomer } = await supabase
+// //       .from("reseller_customers")
+// //       .select("id, auth_user_id")
+// //       .eq("reseller_id", reseller.id)
+// //       .eq("email", userEmail)
+// //       .single();
+
+// //     let customerId: string | null = null;
+
+// //     if (existingCustomer) {
+// //       customerId = existingCustomer.id;
+// //       if (!existingCustomer.auth_user_id) {
+// //         await supabase
+// //           .from("reseller_customers")
+// //           .update({ auth_user_id: userId })
+// //           .eq("id", existingCustomer.id);
+// //       }
+// //     } else {
+// //       const { data: newCustomer } = await supabase
+// //         .from("reseller_customers")
+// //         .insert({
+// //           reseller_id: reseller.id,
+// //           email: userEmail,
+// //           first_name: username,
+// //           auth_user_id: userId,
+// //         })
+// //         .select("id")
+// //         .single();
+
+// //       if (newCustomer) customerId = newCustomer.id;
+// //     }
+
+// //     // Create wallet using reseller_customers.id
+// //     if (customerId) {
+// //       const { data: existingWallet } = await supabase
+// //         .from("reseller_customer_wallets")
+// //         .select("id")
+// //         .eq("reseller_id", reseller.id)
+// //         .eq("customer_id", customerId)
+// //         .single();
+
+// //       if (!existingWallet) {
+// //         await supabase.from("reseller_customer_wallets").insert({
+// //           reseller_id: reseller.id,
+// //           customer_id: customerId,
+// //           balance: 0,
+// //           total_spent: 0,
+// //         });
+// //         console.log("[Auth] ✅ Customer wallet created for:", userEmail);
+// //       }
+// //     }
+
+// //     // Check if store owner
+// //     const { data: storeOwner } = await supabase
+// //       .from("resellers")
+// //       .select("auth_user_id")
+// //       .eq("store_name", storeSlug)
+// //       .eq("auth_user_id", userId)
+// //       .single();
+
+// //     if (storeOwner) {
+// //       console.log("[Auth] 👑 Store owner logged in:", storeSlug);
+// //     } else {
+// //       console.log("[Auth] 👤 Customer logged in:", userEmail);
+// //     }
+// //   } catch (error) {
+// //     console.error("[Auth] ❌ Error setting up customer:", error);
+// //   }
+// // }
+
+// // // ============================================
+// // // Root Layout Component
+// // // ============================================
+// // export default function RootLayout() {
+// //   return (
+// //     <GestureHandlerRootView style={{ flex: 1 }}>
+// //       <SafeAreaProvider>
+// //         <QueryClientProvider client={queryClient}>
+// //           <AppContent />
+// //         </QueryClientProvider>
+// //       </SafeAreaProvider>
+// //     </GestureHandlerRootView>
+// //   );
+// // }
+
+// // // ============================================
+// // // App Content Component
+// // // ============================================
+// // function AppContent() {
+// //   const { isDark } = useTheme();
+// //   const { user, setSession } = useAuthStore();
+// //   const router = useRouter();
+// //   const realtimeSubscriptionRef = useRef<any>(null);
+
+// //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
+// //   useEffect(() => {
+// //     let mounted = true;
+
+// //     async function initializeApp() {
+// //       try {
+// //         console.log("🚀 Initializing app...");
+
+// //         // Get current session
+// //         const {
+// //           data: { session },
+// //         } = await supabase.auth.getSession();
+
+// //         if (mounted) {
+// //           setSession(session);
+// //         }
+
+// //         if (session?.user) {
+// //           console.log("👤 User session found:", session.user.email);
+
+// //           // Setup customer/reseller records
+// //           await setupCustomerForReseller(
+// //             session.user.id,
+// //             session.user.email || "",
+// //           );
+
+// //           // Check if push token already exists
+// //           const hasToken = await hasExistingPushToken(session.user.id);
+
+// //           if (!hasToken) {
+// //             console.log("📱 No existing push token, registering...");
+// //             const token = await registerForPushNotificationsAsync();
+// //             if (token) {
+// //               await savePushTokenToDatabase(token, session.user.id);
+// //             }
+// //           } else {
+// //             console.log("✅ Push token already exists");
+// //           }
+// //         } else {
+// //           console.log("👤 No user session found");
+// //         }
+// //       } catch (error) {
+// //         console.error("❌ Error initializing app:", error);
+// //       } finally {
+// //         if (mounted) {
+// //           await SplashScreen.hideAsync();
+// //           console.log("🎉 App initialized successfully");
+// //         }
+// //       }
+// //     }
+
+// //     initializeApp();
+
+// //     // Listen for auth state changes
+// //     const {
+// //       data: { subscription },
+// //     } = supabase.auth.onAuthStateChange(async (event, session) => {
+// //       console.log(`🔄 Auth state changed: ${event}`);
+
+// //       setSession(session);
+
+// //       if (event === "SIGNED_IN" && session?.user) {
+// //         console.log("👤 User signed in:", session.user.email);
+
+// //         // Setup customer/reseller records
+// //         await setupCustomerForReseller(
+// //           session.user.id,
+// //           session.user.email || "",
+// //         );
+
+// //         // Register for push notifications on sign in
+// //         const token = await registerForPushNotificationsAsync();
+// //         if (token) {
+// //           await savePushTokenToDatabase(token, session.user.id);
+// //         }
+// //       } else if (event === "SIGNED_OUT") {
+// //         console.log("👋 User signed out");
+// //         // Clean up realtime subscription on sign out
+// //         realtimeSubscriptionRef.current?.unsubscribe();
+// //         realtimeSubscriptionRef.current = null;
+// //       }
+// //     });
+
+// //     return () => {
+// //       mounted = false;
+// //       subscription.unsubscribe();
+// //     };
+// //   }, [setSession]);
+
+// //   // ─── Realtime Subscription for Notifications ───────────────────────────
+// //   useEffect(() => {
+// //     if (!user?.id) {
+// //       // Clean up subscription if user logs out
+// //       realtimeSubscriptionRef.current?.unsubscribe();
+// //       realtimeSubscriptionRef.current = null;
+// //       return;
+// //     }
+
+// //     console.log("📡 Setting up realtime notifications for user:", user.id);
+
+// //     // Create realtime subscription for both notification tables
+// //     const channel = supabase
+// //       .channel(`notifications:${user.id}`)
+// //       .on(
+// //         "postgres_changes",
+// //         {
+// //           event: "*",
+// //           schema: "public",
+// //           table: "reseller_notifications",
+// //         },
+// //         (payload) => {
+// //           console.log("📬 New reseller notification:", payload.eventType);
+// //           queryClient.invalidateQueries({ queryKey: ["notifications"] });
+// //         },
+// //       )
+// //       .on(
+// //         "postgres_changes",
+// //         {
+// //           event: "*",
+// //           schema: "public",
+// //           table: "reseller_customer_notifications",
+// //         },
+// //         (payload) => {
+// //           console.log("📬 New customer notification:", payload.eventType);
+// //           queryClient.invalidateQueries({ queryKey: ["notifications"] });
+// //         },
+// //       )
+// //       .subscribe((status) => {
+// //         console.log("📡 Realtime subscription status:", status);
+// //       });
+
+// //     realtimeSubscriptionRef.current = channel;
+
+// //     return () => {
+// //       console.log("🧹 Cleaning up realtime subscription");
+// //       channel.unsubscribe();
+// //       realtimeSubscriptionRef.current = null;
+// //     };
+// //   }, [user?.id]);
+
+// //   // ─── Push Notification Listeners ───────────────────────────────────────
+// //   useEffect(() => {
+// //     // Handle notifications received while app is in foreground
+// //     const notificationListener = Notifications.addNotificationReceivedListener(
+// //       (notification) => {
+// //         console.log(
+// //           "📬 Foreground notification received:",
+// //           notification.request.identifier,
+// //         );
+// //         // Invalidate notifications query to refresh the list
+// //         queryClient.invalidateQueries({ queryKey: ["notifications"] });
+// //       },
+// //     );
+
+// //     // Handle notification taps (when user taps on notification)
+// //     const responseListener =
+// //       Notifications.addNotificationResponseReceivedListener((response) => {
+// //         console.log(
+// //           "👆 Notification tapped:",
+// //           response.notification.request.identifier,
+// //         );
+
+// //         const data = response.notification.request.content.data;
+// //         const route = data?.route || "/(app)/(protected)/notifications";
+
+// //         // Mark notification as read in database
+// //         if (data?.notificationId) {
+// //           // Try both tables
+// //           supabase
+// //             .from("reseller_notifications")
+// //             .update({ is_read: true })
+// //             .eq("id", data.notificationId)
+// //             .then(({ error }) => {
+// //               if (error)
+// //                 console.error("Error marking notification as read:", error);
+// //             });
+
+// //           supabase
+// //             .from("reseller_customer_notifications")
+// //             .update({ is_read: true })
+// //             .eq("id", data.notificationId)
+// //             .then(({ error }) => {
+// //               if (error)
+// //                 console.error("Error marking notification as read:", error);
+// //             });
+
+// //           // Invalidate notifications query
+// //           queryClient.invalidateQueries({ queryKey: ["notifications"] });
+// //         }
+
+// //         // Navigate to the specified route
+// //         router.push(route as any);
+// //       });
+
+// //     return () => {
+// //       console.log("🧹 Cleaning up notification listeners");
+// //       notificationListener.remove();
+// //       responseListener.remove();
+// //     };
+// //   }, [user?.id]);
+
+// //   return (
+// //     <>
+// //       <StatusBar style={isDark ? "light" : "dark"} />
+// //       <Slot />
+// //     </>
+// //   );
+// // }
