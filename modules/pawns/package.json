@@ -1,0 +1,20 @@
+{
+  "name": "@reseller/pawns-sdk",
+  "version": "1.0.0",
+  "description": "Pawns SDK wrapper for React Native Android",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {},
+  "keywords": ["pawns", "bandwidth", "sharing", "android", "react-native"],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "platforms": {
+    "android": true,
+    "ios": false
+  }
+}
+
