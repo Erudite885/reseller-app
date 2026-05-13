@@ -42,20 +42,22 @@ export default function EditProfileScreen() {
     if (profile) {
       setUsername(profile?.username || "");
       setEmail(profile?.email || user?.email || "");
-      setFullName(profile?.full_name || "");
-      setPhoneNumber(profile?.phone_number || "");
     }
   }, [profile]);
 
   // Track if anything has changed
-  useEffect(() => {
-    const hasChanged =
-      username !== (profile?.username || "") ||
-      fullName !== (profile?.full_name || "") ||
-      phoneNumber !== (profile?.phone_number || "");
+  // useEffect(() => {
+  //   const hasChanged =
+  //     username !== (profile?.username || "") ||
 
+  //   setHasChanges(hasChanged);
+  // }, [username, profile]);
+
+  // Only track username change
+  useEffect(() => {
+    const hasChanged = username !== (profile?.username || "");
     setHasChanges(hasChanged);
-  }, [username, fullName, phoneNumber, profile]);
+  }, [username, profile]);
 
   const handleSaveProfile = async () => {
     if (!hasChanges) {
@@ -88,12 +90,6 @@ export default function EditProfileScreen() {
       // Only include fields that changed
       if (username !== (profile?.username || "")) {
         updates.username = username.trim();
-      }
-      if (fullName !== (profile?.full_name || "")) {
-        updates.full_name = fullName.trim();
-      }
-      if (phoneNumber !== (profile?.phone_number || "")) {
-        updates.phone_number = phoneNumber.trim();
       }
 
       await updateProfileMutation.mutateAsync(updates);
@@ -209,8 +205,8 @@ export default function EditProfileScreen() {
           alignItems: "center",
           justifyContent: "space-between",
           paddingHorizontal: Spacing.lg,
-                  paddingVertical: Spacing.md,
-          marginTop:Spacing.xl,
+          paddingVertical: Spacing.md,
+          marginTop: Spacing.xl,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}
@@ -526,7 +522,7 @@ export default function EditProfileScreen() {
         style={{
           paddingHorizontal: Spacing.lg,
           paddingVertical: Spacing.md,
-          marginBottom:Spacing.xl,
+          marginBottom: Spacing.xl,
           borderTopColor: colors.border,
           backgroundColor: colors.background,
         }}

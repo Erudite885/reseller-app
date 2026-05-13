@@ -17,6 +17,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
+// Add near the top of your _layout.tsx
+import PawnsSDK from '@/modules/pawns';
+
+// Get API key from environment
+const API_KEY = process.env.EXPO_PUBLIC_PAWNS_API_KEY ?? "";
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -482,6 +487,21 @@ function AppContent() {
       responseListener.remove();
     };
   }, []);
+
+  // Inside your AppContent component, add:
+  useEffect(() => {
+    const initPawns = async () => {
+      if (user) {
+        const serviceConfig = {
+          title: "Bandwidth Sharing",
+          body: "Share your internet and earn rewards",
+          channelName: "Bandwidth Sharing",
+        };
+        await PawnsSDK.initialize(API_KEY, serviceConfig);
+      }
+    };
+    initPawns();
+  }, [user]);
 
   return (
     <>
