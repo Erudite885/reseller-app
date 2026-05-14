@@ -76,6 +76,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         color: RESELLER_CONFIG.theme?.primary || "#379114",
       },
     ],
+    "./plugins/withAndroidxCoreResolution",
   ],
 
   experiments: {
