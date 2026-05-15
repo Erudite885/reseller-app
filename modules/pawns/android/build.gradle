@@ -20,6 +20,9 @@ android {
     }
 }
 
+// NOTE: The repositories block here is for local IDE resolution only.
+// At build time, JitPack is injected into settings.gradle by the
+// withAndroidxCoreResolution config plugin.
 repositories {
     mavenCentral()
     google()
@@ -36,10 +39,7 @@ configurations.all {
 dependencies {
     implementation 'app.pawns:android-pawns-sdk:1.8.0'
     implementation "com.facebook.react:react-native:+"
-    implementation "androidx.core:core:1.13.1"
-    implementation "androidx.core:core-ktx:1.13.1"
 }
-
 
 // apply plugin: 'com.android.library'
 // apply plugin: 'kotlin-android'
@@ -77,16 +77,12 @@ dependencies {
 // }
 
 // dependencies {
-//     // Force the exact Pawns SDK
 //     implementation 'app.pawns:android-pawns-sdk:1.8.0'
-
-//     // React Native
 //     implementation "com.facebook.react:react-native:+"
-
-//     // Core dependencies
 //     implementation "androidx.core:core:1.13.1"
 //     implementation "androidx.core:core-ktx:1.13.1"
 // }
+
 
 // // apply plugin: 'com.android.library'
 // // apply plugin: 'kotlin-android'
@@ -111,9 +107,9 @@ dependencies {
 // // }
 
 // // repositories {
-// //     maven { url 'https://jitpack.io' }
 // //     mavenCentral()
 // //     google()
+// //     maven { url 'https://jitpack.io' }
 // // }
 
 // // configurations.all {
@@ -124,9 +120,15 @@ dependencies {
 // // }
 
 // // dependencies {
+// //     // Force the exact Pawns SDK
 // //     implementation 'app.pawns:android-pawns-sdk:1.8.0'
+
+// //     // React Native
 // //     implementation "com.facebook.react:react-native:+"
+
+// //     // Core dependencies
 // //     implementation "androidx.core:core:1.13.1"
+// //     implementation "androidx.core:core-ktx:1.13.1"
 // // }
 
 // // // apply plugin: 'com.android.library'
@@ -153,9 +155,10 @@ dependencies {
 
 // // // repositories {
 // // //     maven { url 'https://jitpack.io' }
+// // //     mavenCentral()
+// // //     google()
 // // // }
 
-// // // // Force resolution for Pawns SDK conflict
 // // // configurations.all {
 // // //     resolutionStrategy {
 // // //         force 'androidx.core:core:1.13.1'
@@ -166,6 +169,7 @@ dependencies {
 // // // dependencies {
 // // //     implementation 'app.pawns:android-pawns-sdk:1.8.0'
 // // //     implementation "com.facebook.react:react-native:+"
+// // //     implementation "androidx.core:core:1.13.1"
 // // // }
 
 // // // // apply plugin: 'com.android.library'
@@ -194,9 +198,8 @@ dependencies {
 // // // //     maven { url 'https://jitpack.io' }
 // // // // }
 
+// // // // // Force resolution for Pawns SDK conflict
 // // // // configurations.all {
-// // // //     // Pawns SDK pulls in androidx.core:1.17.0 which requires compileSdk 36 + AGP 8.9.1.
-// // // //     // Expo 53 uses compileSdk 35 + AGP 8.8.2, so we force a compatible version here.
 // // // //     resolutionStrategy {
 // // // //         force 'androidx.core:core:1.13.1'
 // // // //         force 'androidx.core:core-ktx:1.13.1'
@@ -207,3 +210,43 @@ dependencies {
 // // // //     implementation 'app.pawns:android-pawns-sdk:1.8.0'
 // // // //     implementation "com.facebook.react:react-native:+"
 // // // // }
+
+// // // // // apply plugin: 'com.android.library'
+// // // // // apply plugin: 'kotlin-android'
+
+// // // // // android {
+// // // // //     compileSdkVersion 35
+// // // // //     namespace "com.pawns.sdk"
+
+// // // // //     defaultConfig {
+// // // // //         minSdkVersion 21
+// // // // //         targetSdkVersion 35
+// // // // //     }
+
+// // // // //     compileOptions {
+// // // // //         sourceCompatibility JavaVersion.VERSION_17
+// // // // //         targetCompatibility JavaVersion.VERSION_17
+// // // // //     }
+
+// // // // //     kotlinOptions {
+// // // // //         jvmTarget = '17'
+// // // // //     }
+// // // // // }
+
+// // // // // repositories {
+// // // // //     maven { url 'https://jitpack.io' }
+// // // // // }
+
+// // // // // configurations.all {
+// // // // //     // Pawns SDK pulls in androidx.core:1.17.0 which requires compileSdk 36 + AGP 8.9.1.
+// // // // //     // Expo 53 uses compileSdk 35 + AGP 8.8.2, so we force a compatible version here.
+// // // // //     resolutionStrategy {
+// // // // //         force 'androidx.core:core:1.13.1'
+// // // // //         force 'androidx.core:core-ktx:1.13.1'
+// // // // //     }
+// // // // // }
+
+// // // // // dependencies {
+// // // // //     implementation 'app.pawns:android-pawns-sdk:1.8.0'
+// // // // //     implementation "com.facebook.react:react-native:+"
+// // // // // }
