@@ -49,7 +49,7 @@ const withJitpackRepo = (config) => {
       /(dependencyResolutionManagement\s*\{[^}]*repositories\s*\{)/s,
       (match) => {
         return (
-          match + `\n        maven { url 'https://jitpack.io' } // Pawns SDK`
+          match + `\n        maven { url 'https://jitpack.io' } `
         );
       },
     );
