@@ -45,7 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: RESELLER_CONFIG.assets?.icon || "./assets/images/icon.png",
   scheme: "reseller-data",
   userInterfaceStyle: "automatic",
-  newArchEnabled: false,
+  newArchEnabled: true,
 
   android: {
     adaptiveIcon: {
