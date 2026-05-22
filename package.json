@@ -58,5 +58,8 @@
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
   },
+  "overrides": {
+    "@opentelemetry/api": "npm:empty-module@0.0.2"
+  },
   "private": true
 }
