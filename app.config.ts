@@ -61,13 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     jsEngine: "hermes",
     package: RESELLER_CONFIG.config?.androidPackageName,
-    edgeToEdgeEnabled: true,
-    permissions: [
-      "android.permission.INTERNET",
-      "android.permission.ACCESS_NETWORK_STATE",
-      "android.permission.FOREGROUND_SERVICE",
-      "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
-    ],
+    edgeToEdgeEnabled: true
   },
 
   plugins: [
@@ -81,8 +75,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "./assets/images/notification-icon.png",
         color: RESELLER_CONFIG.theme?.primary || "#379114",
       },
-    ],
-    "./plugins/withAndroidxCoreResolution",
+    ]
   ],
 
   experiments: {
