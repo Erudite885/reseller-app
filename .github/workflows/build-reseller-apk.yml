@@ -20,11 +20,16 @@ on:
         required: false
         type: string
         default: 'production'
+      version:
+        description: 'Version tag for release (e.g., v1.0.0, or leave empty for auto-generated)'
+        required: false
+        type: string
+        default: ''
 
 env:
   EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
   EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
-  EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}  # ← ADD THIS
+  EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}
 
 jobs:
   build:
@@ -90,21 +95,128 @@ jobs:
           EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
           EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}
 
+      # Determine release tag
+      - name: Determine release tag
+        id: release_tag
+        run: |
+          STORE_NAME="${{ github.event.inputs.store_name }}"
+          CONFIG_ID="${{ github.event.inputs.config_id }}"
+          TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+          
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${STORE_NAME}-${CONFIG_ID}-${TIMESTAMP}"
+          fi
+          
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Release tag: ${TAG}"
+
+      # Create release and upload APK using gh CLI
+      - name: Create Release and Upload APK
+        id: upload_release
+        env:
+          GH_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+        run: |
+          STORE_NAME="${{ github.event.inputs.store_name }}"
+          CONFIG_ID="${{ github.event.inputs.config_id }}"
+          RESELLER_ID="${{ github.event.inputs.reseller_id }}"
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          TAG="${{ steps.release_tag.outputs.tag }}"
+          APK_PATH="./${STORE_NAME}.apk"
+          
+          # Verify APK exists
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: APK file not found at $APK_PATH"
+            exit 1
+          fi
+          
+          # Create release notes
+          RELEASE_NOTES="## Reseller APK Build
+          
+          ### Build Information
+          - **Reseller ID:** ${RESELLER_ID}
+          - **Config ID:** ${CONFIG_ID}
+          - **Store Name:** ${STORE_NAME}
+          - **Build Date:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - **Environment:** ${ENVIRONMENT}
+          
+          ### Download
+          The APK file is attached below."
+          
+          # Create release and upload APK to tenant-distribution repo
+          echo "Creating release ${TAG} in Erudite885/tenant-distribution..."
+          
+          gh release create "$TAG" \
+            --repo "Erudite885/tenant-distribution" \
+            --title "${STORE_NAME} - Build ${CONFIG_ID}" \
+            --notes "${RELEASE_NOTES}" \
+            "$APK_PATH"
+          
+          # Construct download URL
+          DOWNLOAD_URL="https://github.com/Erudite885/tenant-distribution/releases/download/${TAG}/${STORE_NAME}.apk"
+          echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
+          echo "release_tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "✅ APK uploaded successfully to: ${DOWNLOAD_URL}"
+
+      # Notify backend with APK URL from release
       - name: Notify backend
         if: success()
         run: |
+          DOWNLOAD_URL="${{ steps.upload_release.outputs.download_url }}"
+          
+          echo "Notifying backend with APK URL: ${DOWNLOAD_URL}"
+          
           curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
             -d "{
               \"configId\": \"${{ github.event.inputs.config_id }}\",
               \"resellerId\": \"${{ github.event.inputs.reseller_id }}\",
-              \"status\": \"completed\"
+              \"status\": \"completed\",
+              \"apkUrl\": \"${DOWNLOAD_URL}\"
             }"
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.inputs.store_name }}-apk
-          path: "./${{ github.event.inputs.store_name }}.apk"
-          retention-days: 7
+      # Update reseller_app_configs table with APK URL using Supabase
+      - name: Update database with APK URL
+        if: success()
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.BIMBO_SUPABASE_SECRET_KEY }}
+        run: |
+          DOWNLOAD_URL="${{ steps.upload_release.outputs.download_url }}"
+          CONFIG_ID="${{ github.event.inputs.config_id }}"
+          
+          if [ -z "$SUPABASE_KEY" ]; then
+            echo "WARNING: BIMBO_SUPABASE_SECRET_KEY not found, skipping database update"
+            exit 0
+          fi
+          
+          echo "Updating reseller_app_configs for config ID: ${CONFIG_ID}"
+          
+          # Update the config record with APK URL
+          curl -X PATCH "${SUPABASE_URL}/rest/v1/reseller_app_configs?id=eq.${CONFIG_ID}" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"apk_url\": \"${DOWNLOAD_URL}\",
+              \"build_status\": \"completed\",
+              \"updated_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"
+            }"
+          
+          echo "✅ Database updated successfully"
+
+      # Output summary
+      - name: Build Summary
+        if: success()
+        run: |
+          echo "========================================="
+          echo "✅ BUILD COMPLETED SUCCESSFULLY"
+          echo "========================================="
+          echo "Store Name: ${{ github.event.inputs.store_name }}"
+          echo "Config ID: ${{ github.event.inputs.config_id }}"
+          echo "Reseller ID: ${{ github.event.inputs.reseller_id }}"
+          echo "Release Tag: ${{ steps.upload_release.outputs.release_tag }}"
+          echo "Download URL: ${{ steps.upload_release.outputs.download_url }}"
+          echo "========================================="
