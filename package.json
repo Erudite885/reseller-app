@@ -16,7 +16,7 @@
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
-    "@supabase/supabase-js": "^2.88.0",
+    "@supabase/supabase-js": "2.105.4",
     "@tanstack/react-query": "^5.90.12",
     "expo": "~53.0.25",
     "expo-blur": "~14.1.5",
@@ -57,9 +57,6 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
-  },
-  "overrides": {
-    "@opentelemetry/api": "npm:empty-module@0.0.2"
   },
   "private": true
 }
