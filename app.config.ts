@@ -59,7 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       resizeMode: "cover",
       backgroundColor: RESELLER_CONFIG.theme?.primary || "#379114",
     },
-    jsEngine: "hermes",
+    jsEngine: "jsc",
     package: RESELLER_CONFIG.config?.androidPackageName,
     edgeToEdgeEnabled: true
   },
