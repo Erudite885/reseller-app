@@ -25,9 +25,6 @@ if [ -z "$CONFIG" ]; then
   exit 1
 fi
 
-# Save config for app.config.ts to read
-echo "$CONFIG" > reseller-config.json
-
 # Extract values
 ICON_URL=$(echo "$CONFIG" | jq -r '.assets.icon // empty')
 STORE_NAME=$(echo "$CONFIG" | jq -r '.storeName // "reseller"')
@@ -52,5 +49,13 @@ else
   cp assets/images/splash.png assets/custom/splash.png 2>/dev/null || true
   cp assets/images/adaptive-icon.png assets/custom/adaptive-icon.png 2>/dev/null || true
 fi
+
+# Save config with LOCAL paths instead of remote URLs
+echo "$CONFIG" | jq '
+  .assets.icon = "./assets/custom/icon.png" |
+  .assets.splash = "./assets/custom/splash.png" |
+  .assets.adaptiveIcon = "./assets/custom/adaptive-icon.png" |
+  .assets.logo = "./assets/custom/icon.png"
+' > reseller-config.json
 
 echo "✅ Reseller assets ready"
