@@ -45,7 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: RESELLER_CONFIG.assets?.icon || "./assets/images/icon.png",
   scheme: "reseller-data",
   userInterfaceStyle: "automatic",
-  newArchEnabled: true,
+  newArchEnabled: false,
 
   android: {
     adaptiveIcon: {
@@ -61,7 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     jsEngine: "hermes",
     package: RESELLER_CONFIG.config?.androidPackageName,
-    edgeToEdgeEnabled: true
+    edgeToEdgeEnabled: true,
   },
 
   plugins: [
@@ -75,7 +75,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "./assets/images/notification-icon.png",
         color: RESELLER_CONFIG.theme?.primary || "#379114",
       },
-    ]
+    ],
   ],
 
   experiments: {

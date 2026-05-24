@@ -18,10 +18,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
 
-
-// Get API key from environment
-const API_KEY = process.env.EXPO_PUBLIC_PAWNS_API_KEY ?? "";
-
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
