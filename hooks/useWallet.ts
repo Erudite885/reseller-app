@@ -25,40 +25,49 @@ export function useWallet() {
     queryFn: async () => {
       if (!user?.id) throw new Error("No user");
 
-      const { data: reseller } = await supabase
+      // First, get the reseller for this store
+      const { data: reseller, error: resellerError } = await supabase
         .from("resellers")
         .select("id, auth_user_id")
         .eq("store_name", storeSlug)
         .eq("status", "active")
         .single();
 
-      if (!reseller) throw new Error("Store not found");
+      if (resellerError || !reseller) {
+        throw new Error("Store not found");
+      }
 
-      // Check if user is the reseller
+      // Check if the logged-in user IS the reseller (store owner)
       if (reseller.auth_user_id === user.id) {
-        const { data: wallet } = await supabase
+        // User is a reseller - fetch from reseller_wallets
+        const { data: wallet, error: walletError } = await supabase
           .from("reseller_wallets")
-          .select("id, balance")
+          .select("id, balance, total_sales, total_profit")
           .eq("reseller_id", reseller.id)
           .maybeSingle();
+
+        if (walletError) throw walletError;
 
         return {
           id: wallet?.id || "",
           balance: wallet?.balance || 0,
-          total_sales: 0,
-          total_profit: 0,
+          total_sales: wallet?.total_sales || 0,
+          total_profit: wallet?.total_profit || 0,
         } as Wallet;
       }
 
-      // User is a customer - find their customer record
-      const { data: customer } = await supabase
+      // User is a customer - get their customer record first
+      const { data: customer, error: customerError } = await supabase
         .from("reseller_customers")
         .select("id")
         .eq("reseller_id", reseller.id)
         .eq("auth_user_id", user.id)
         .maybeSingle();
 
+      if (customerError) throw customerError;
+
       if (!customer) {
+        // Customer record not found - return zero balance
         return {
           id: "",
           balance: 0,
@@ -67,12 +76,15 @@ export function useWallet() {
         } as Wallet;
       }
 
-      const { data: wallet } = await supabase
+      // Get customer wallet
+      const { data: wallet, error: walletError } = await supabase
         .from("reseller_customer_wallets")
         .select("id, balance, total_spent")
         .eq("reseller_id", reseller.id)
         .eq("customer_id", customer.id)
         .maybeSingle();
+
+      if (walletError) throw walletError;
 
       return {
         id: wallet?.id || "",
@@ -82,8 +94,8 @@ export function useWallet() {
       } as Wallet;
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 30,
-    refetchInterval: 60000,
+    staleTime: 1000 * 30, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Auto-refetch every 60 seconds
   });
 }
 
@@ -105,10 +117,6 @@ export function useWallet() {
 //   return useResellerStore.getState().config.storeName;
 // }
 
-// /**
-//  * Hook to fetch wallet for a customer under a specific reseller.
-//  * The wallet is scoped to the reseller's store.
-//  */
 // export function useWallet() {
 //   const { user } = useAuthStore();
 //   const storeSlug = getStoreSlug();
@@ -118,28 +126,40 @@ export function useWallet() {
 //     queryFn: async () => {
 //       if (!user?.id) throw new Error("No user");
 
-//       // Get reseller ID from store name
 //       const { data: reseller } = await supabase
 //         .from("resellers")
-//         .select("id")
+//         .select("id, auth_user_id")
 //         .eq("store_name", storeSlug)
 //         .eq("status", "active")
 //         .single();
 
 //       if (!reseller) throw new Error("Store not found");
 
-//       // ✅ Use maybeSingle() — returns null (not a 406 error) when no row exists
-//       const { data: customerWallet, error } = await supabase
-//         .from("reseller_customer_wallets")
-//         .select("id, balance, total_spent")
+//       // Check if user is the reseller
+//       if (reseller.auth_user_id === user.id) {
+//         const { data: wallet } = await supabase
+//           .from("reseller_wallets")
+//           .select("id, balance")
+//           .eq("reseller_id", reseller.id)
+//           .maybeSingle();
+
+//         return {
+//           id: wallet?.id || "",
+//           balance: wallet?.balance || 0,
+//           total_sales: 0,
+//           total_profit: 0,
+//         } as Wallet;
+//       }
+
+//       // User is a customer - find their customer record
+//       const { data: customer } = await supabase
+//         .from("reseller_customers")
+//         .select("id")
 //         .eq("reseller_id", reseller.id)
-//         .eq("customer_id", user.id)
+//         .eq("auth_user_id", user.id)
 //         .maybeSingle();
 
-//       if (error) throw error;
-
-//       // If no wallet exists yet, return zero balance
-//       if (!customerWallet) {
+//       if (!customer) {
 //         return {
 //           id: "",
 //           balance: 0,
@@ -148,10 +168,17 @@ export function useWallet() {
 //         } as Wallet;
 //       }
 
+//       const { data: wallet } = await supabase
+//         .from("reseller_customer_wallets")
+//         .select("id, balance, total_spent")
+//         .eq("reseller_id", reseller.id)
+//         .eq("customer_id", customer.id)
+//         .maybeSingle();
+
 //       return {
-//         id: customerWallet.id,
-//         balance: customerWallet.balance,
-//         total_sales: customerWallet.total_spent || 0,
+//         id: wallet?.id || "",
+//         balance: wallet?.balance || 0,
+//         total_sales: wallet?.total_spent || 0,
 //         total_profit: 0,
 //       } as Wallet;
 //     },
@@ -160,6 +187,8 @@ export function useWallet() {
 //     refetchInterval: 60000,
 //   });
 // }
+
+// // // hooks/useWallet.ts
 
 // // import { useQuery } from "@tanstack/react-query";
 // // import { supabase } from "@/lib/supabase";
@@ -178,8 +207,8 @@ export function useWallet() {
 // // }
 
 // // /**
-// //  * Hook to fetch wallet for a customer under a specific reseller
-// //  * The wallet is scoped to the reseller's store
+// //  * Hook to fetch wallet for a customer under a specific reseller.
+// //  * The wallet is scoped to the reseller's store.
 // //  */
 // // export function useWallet() {
 // //   const { user } = useAuthStore();
@@ -200,15 +229,15 @@ export function useWallet() {
 
 // //       if (!reseller) throw new Error("Store not found");
 
-// //       // Get customer wallet for this reseller
+// //       // ✅ Use maybeSingle() — returns null (not a 406 error) when no row exists
 // //       const { data: customerWallet, error } = await supabase
 // //         .from("reseller_customer_wallets")
 // //         .select("id, balance, total_spent")
 // //         .eq("reseller_id", reseller.id)
 // //         .eq("customer_id", user.id)
-// //         .single();
+// //         .maybeSingle();
 
-// //       if (error && error.code !== "PGRST116") throw error;
+// //       if (error) throw error;
 
 // //       // If no wallet exists yet, return zero balance
 // //       if (!customerWallet) {
@@ -233,161 +262,75 @@ export function useWallet() {
 // //   });
 // // }
 
-// // // // hooks/useWallet.ts
-// // // import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// // // import { useQuery } from "@tanstack/react-query";
 // // // import { supabase } from "@/lib/supabase";
 // // // import { useAuthStore } from "@/store/auth.store";
+// // // import { useResellerStore } from "@/store/resellerStore";
 
-// // // // Wallet type definition
 // // // export interface Wallet {
 // // //   id: string;
-// // //   user_id: string;
 // // //   balance: number;
-// // //   currency: string;
-// // //   created_at: string;
-// // //   updated_at: string;
+// // //   total_sales: number;
+// // //   total_profit: number;
+// // // }
+
+// // // function getStoreSlug(): string {
+// // //   return useResellerStore.getState().config.storeName;
 // // // }
 
 // // // /**
-// // //  * Hook to fetch wallet data for the current user
+// // //  * Hook to fetch wallet for a customer under a specific reseller
+// // //  * The wallet is scoped to the reseller's store
 // // //  */
 // // // export function useWallet() {
 // // //   const { user } = useAuthStore();
+// // //   const storeSlug = getStoreSlug();
 
 // // //   return useQuery({
-// // //     queryKey: ["wallet", user?.id],
+// // //     queryKey: ["wallet", storeSlug, user?.id],
 // // //     queryFn: async () => {
 // // //       if (!user?.id) throw new Error("No user");
 
-// // //       const { data, error } = await supabase
-// // //         .from("wallets")
-// // //         .select("*")
-// // //         .eq("user_id", user.id)
+// // //       // Get reseller ID from store name
+// // //       const { data: reseller } = await supabase
+// // //         .from("resellers")
+// // //         .select("id")
+// // //         .eq("store_name", storeSlug)
+// // //         .eq("status", "active")
 // // //         .single();
 
-// // //       if (error) throw error;
-// // //       return data as Wallet;
-// // //     },
-// // //     enabled: !!user?.id,
-// // //     staleTime: 1000 * 30, // Consider data fresh for 30 seconds
-// // //     refetchInterval: 60000, // Auto-refetch every 60 seconds
-// // //   });
-// // // }
+// // //       if (!reseller) throw new Error("Store not found");
 
-// // // /**
-// // //  * Hook to fund wallet (add money)
-// // //  */
-// // // export function useFundWallet() {
-// // //   const queryClient = useQueryClient();
-// // //   const { user } = useAuthStore();
-
-// // //   return useMutation({
-// // //     mutationFn: async (amount: number) => {
-// // //       if (!user?.id) throw new Error("No user");
-// // //       if (amount <= 0) throw new Error("Amount must be greater than 0");
-
-// // //       // Get current wallet balance
-// // //       const { data: wallet, error: fetchError } = await supabase
-// // //         .from("wallets")
-// // //         .select("balance")
-// // //         .eq("user_id", user.id)
+// // //       // Get customer wallet for this reseller
+// // //       const { data: customerWallet, error } = await supabase
+// // //         .from("reseller_customer_wallets")
+// // //         .select("id, balance, total_spent")
+// // //         .eq("reseller_id", reseller.id)
+// // //         .eq("customer_id", user.id)
 // // //         .single();
 
-// // //       if (fetchError) throw fetchError;
+// // //       if (error && error.code !== "PGRST116") throw error;
 
-// // //       // Update wallet with new balance
-// // //       const newBalance = Number(wallet.balance) + amount;
-
-// // //       const { data, error } = await supabase
-// // //         .from("wallets")
-// // //         .update({ balance: newBalance })
-// // //         .eq("user_id", user.id)
-// // //         .select()
-// // //         .single();
-
-// // //       if (error) throw error;
-// // //       return data as Wallet;
-// // //     },
-// // //     onSuccess: () => {
-// // //       // Invalidate wallet query to refresh the balance
-// // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
-// // //     },
-// // //   });
-// // // }
-
-// // // /**
-// // //  * Hook to deduct from wallet (for purchases)
-// // //  */
-// // // export function useDeductWallet() {
-// // //   const queryClient = useQueryClient();
-// // //   const { user } = useAuthStore();
-
-// // //   return useMutation({
-// // //     mutationFn: async (amount: number) => {
-// // //       if (!user?.id) throw new Error("No user");
-// // //       if (amount <= 0) throw new Error("Amount must be greater than 0");
-
-// // //       // Get current wallet balance
-// // //       const { data: wallet, error: fetchError } = await supabase
-// // //         .from("wallets")
-// // //         .select("balance")
-// // //         .eq("user_id", user.id)
-// // //         .single();
-
-// // //       if (fetchError) throw fetchError;
-
-// // //       const currentBalance = Number(wallet.balance);
-
-// // //       // Check if user has sufficient balance
-// // //       if (currentBalance < amount) {
-// // //         throw new Error("Insufficient wallet balance");
+// // //       // If no wallet exists yet, return zero balance
+// // //       if (!customerWallet) {
+// // //         return {
+// // //           id: "",
+// // //           balance: 0,
+// // //           total_sales: 0,
+// // //           total_profit: 0,
+// // //         } as Wallet;
 // // //       }
 
-// // //       // Deduct amount from wallet
-// // //       const newBalance = currentBalance - amount;
-
-// // //       const { data, error } = await supabase
-// // //         .from("wallets")
-// // //         .update({ balance: newBalance })
-// // //         .eq("user_id", user.id)
-// // //         .select()
-// // //         .single();
-
-// // //       if (error) throw error;
-// // //       return data as Wallet;
+// // //       return {
+// // //         id: customerWallet.id,
+// // //         balance: customerWallet.balance,
+// // //         total_sales: customerWallet.total_spent || 0,
+// // //         total_profit: 0,
+// // //       } as Wallet;
 // // //     },
-// // //     onSuccess: () => {
-// // //       // Invalidate wallet query to refresh the balance
-// // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
-// // //     },
-// // //   });
-// // // }
-
-// // // /**
-// // //  * Hook to set wallet balance directly (admin/testing purposes)
-// // //  */
-// // // export function useSetWalletBalance() {
-// // //   const queryClient = useQueryClient();
-// // //   const { user } = useAuthStore();
-
-// // //   return useMutation({
-// // //     mutationFn: async (newBalance: number) => {
-// // //       if (!user?.id) throw new Error("No user");
-// // //       if (newBalance < 0) throw new Error("Balance cannot be negative");
-
-// // //       const { data, error } = await supabase
-// // //         .from("wallets")
-// // //         .update({ balance: newBalance })
-// // //         .eq("user_id", user.id)
-// // //         .select()
-// // //         .single();
-
-// // //       if (error) throw error;
-// // //       return data as Wallet;
-// // //     },
-// // //     onSuccess: () => {
-// // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
-// // //     },
+// // //     enabled: !!user?.id,
+// // //     staleTime: 1000 * 30,
+// // //     refetchInterval: 60000,
 // // //   });
 // // // }
 
@@ -396,22 +339,180 @@ export function useWallet() {
 // // // // import { supabase } from "@/lib/supabase";
 // // // // import { useAuthStore } from "@/store/auth.store";
 
+// // // // // Wallet type definition
+// // // // export interface Wallet {
+// // // //   id: string;
+// // // //   user_id: string;
+// // // //   balance: number;
+// // // //   currency: string;
+// // // //   created_at: string;
+// // // //   updated_at: string;
+// // // // }
+
+// // // // /**
+// // // //  * Hook to fetch wallet data for the current user
+// // // //  */
 // // // // export function useWallet() {
 // // // //   const { user } = useAuthStore();
 
 // // // //   return useQuery({
 // // // //     queryKey: ["wallet", user?.id],
 // // // //     queryFn: async () => {
+// // // //       if (!user?.id) throw new Error("No user");
+
 // // // //       const { data, error } = await supabase
 // // // //         .from("wallets")
 // // // //         .select("*")
-// // // //         .eq("user_id", user?.id)
+// // // //         .eq("user_id", user.id)
 // // // //         .single();
 
 // // // //       if (error) throw error;
-// // // //       return data;
+// // // //       return data as Wallet;
 // // // //     },
 // // // //     enabled: !!user?.id,
-// // // //     // refetchInterval: 30000, // Refetch every 30 seconds
+// // // //     staleTime: 1000 * 30, // Consider data fresh for 30 seconds
+// // // //     refetchInterval: 60000, // Auto-refetch every 60 seconds
 // // // //   });
 // // // // }
+
+// // // // /**
+// // // //  * Hook to fund wallet (add money)
+// // // //  */
+// // // // export function useFundWallet() {
+// // // //   const queryClient = useQueryClient();
+// // // //   const { user } = useAuthStore();
+
+// // // //   return useMutation({
+// // // //     mutationFn: async (amount: number) => {
+// // // //       if (!user?.id) throw new Error("No user");
+// // // //       if (amount <= 0) throw new Error("Amount must be greater than 0");
+
+// // // //       // Get current wallet balance
+// // // //       const { data: wallet, error: fetchError } = await supabase
+// // // //         .from("wallets")
+// // // //         .select("balance")
+// // // //         .eq("user_id", user.id)
+// // // //         .single();
+
+// // // //       if (fetchError) throw fetchError;
+
+// // // //       // Update wallet with new balance
+// // // //       const newBalance = Number(wallet.balance) + amount;
+
+// // // //       const { data, error } = await supabase
+// // // //         .from("wallets")
+// // // //         .update({ balance: newBalance })
+// // // //         .eq("user_id", user.id)
+// // // //         .select()
+// // // //         .single();
+
+// // // //       if (error) throw error;
+// // // //       return data as Wallet;
+// // // //     },
+// // // //     onSuccess: () => {
+// // // //       // Invalidate wallet query to refresh the balance
+// // // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
+// // // //     },
+// // // //   });
+// // // // }
+
+// // // // /**
+// // // //  * Hook to deduct from wallet (for purchases)
+// // // //  */
+// // // // export function useDeductWallet() {
+// // // //   const queryClient = useQueryClient();
+// // // //   const { user } = useAuthStore();
+
+// // // //   return useMutation({
+// // // //     mutationFn: async (amount: number) => {
+// // // //       if (!user?.id) throw new Error("No user");
+// // // //       if (amount <= 0) throw new Error("Amount must be greater than 0");
+
+// // // //       // Get current wallet balance
+// // // //       const { data: wallet, error: fetchError } = await supabase
+// // // //         .from("wallets")
+// // // //         .select("balance")
+// // // //         .eq("user_id", user.id)
+// // // //         .single();
+
+// // // //       if (fetchError) throw fetchError;
+
+// // // //       const currentBalance = Number(wallet.balance);
+
+// // // //       // Check if user has sufficient balance
+// // // //       if (currentBalance < amount) {
+// // // //         throw new Error("Insufficient wallet balance");
+// // // //       }
+
+// // // //       // Deduct amount from wallet
+// // // //       const newBalance = currentBalance - amount;
+
+// // // //       const { data, error } = await supabase
+// // // //         .from("wallets")
+// // // //         .update({ balance: newBalance })
+// // // //         .eq("user_id", user.id)
+// // // //         .select()
+// // // //         .single();
+
+// // // //       if (error) throw error;
+// // // //       return data as Wallet;
+// // // //     },
+// // // //     onSuccess: () => {
+// // // //       // Invalidate wallet query to refresh the balance
+// // // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
+// // // //     },
+// // // //   });
+// // // // }
+
+// // // // /**
+// // // //  * Hook to set wallet balance directly (admin/testing purposes)
+// // // //  */
+// // // // export function useSetWalletBalance() {
+// // // //   const queryClient = useQueryClient();
+// // // //   const { user } = useAuthStore();
+
+// // // //   return useMutation({
+// // // //     mutationFn: async (newBalance: number) => {
+// // // //       if (!user?.id) throw new Error("No user");
+// // // //       if (newBalance < 0) throw new Error("Balance cannot be negative");
+
+// // // //       const { data, error } = await supabase
+// // // //         .from("wallets")
+// // // //         .update({ balance: newBalance })
+// // // //         .eq("user_id", user.id)
+// // // //         .select()
+// // // //         .single();
+
+// // // //       if (error) throw error;
+// // // //       return data as Wallet;
+// // // //     },
+// // // //     onSuccess: () => {
+// // // //       queryClient.invalidateQueries({ queryKey: ["wallet", user?.id] });
+// // // //     },
+// // // //   });
+// // // // }
+
+// // // // // // hooks/useWallet.ts
+// // // // // import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// // // // // import { supabase } from "@/lib/supabase";
+// // // // // import { useAuthStore } from "@/store/auth.store";
+
+// // // // // export function useWallet() {
+// // // // //   const { user } = useAuthStore();
+
+// // // // //   return useQuery({
+// // // // //     queryKey: ["wallet", user?.id],
+// // // // //     queryFn: async () => {
+// // // // //       const { data, error } = await supabase
+// // // // //         .from("wallets")
+// // // // //         .select("*")
+// // // // //         .eq("user_id", user?.id)
+// // // // //         .single();
+
+// // // // //       if (error) throw error;
+// // // // //       return data;
+// // // // //     },
+// // // // //     enabled: !!user?.id,
+// // // // //     // refetchInterval: 30000, // Refetch every 30 seconds
+// // // // //   });
+// // // // // }

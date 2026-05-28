@@ -81,10 +81,108 @@ export default function RegisterScreen() {
   };
 
   // Register customer to current reseller
-  const registerCustomerToReseller = async (userId: string) => {
+  // const registerCustomerToReseller = async (
+  //   userId: string,
+  //   originalEmail: string,
+  //   authEmail: string,
+  // ) => {
+  //   try {
+  //     const storeSlug = useResellerStore.getState().config.storeName;
+  //     const username = formData.email.split("@")[0];
+
+  //     const { data: reseller, error: resellerError } = await supabase
+  //       .from("resellers")
+  //       .select("id")
+  //       .eq("store_name", storeSlug)
+  //       .eq("status", "active")
+  //       .single();
+
+  //     if (resellerError || !reseller) {
+  //       console.log(
+  //         "[Register] No active reseller found for store:",
+  //         storeSlug,
+  //       );
+  //       return;
+  //     }
+
+  //     const { data: existingCustomer } = await supabase
+  //       .from("reseller_customers")
+  //       .select("id, auth_user_id")
+  //       .eq("reseller_id", reseller.id)
+  //       .eq("email", formData.email)
+  //       .single();
+
+  //     if (existingCustomer) {
+  //       if (!existingCustomer.auth_user_id) {
+  //         await supabase
+  //           .from("reseller_customers")
+  //           .update({ auth_user_id: userId })
+  //           .eq("id", existingCustomer.id);
+  //         console.log("[Register] ✅ Customer updated with auth_user_id");
+  //       } else {
+  //         console.log(
+  //           "[Register] Customer already registered with this reseller",
+  //         );
+  //       }
+  //     } else {
+  //       const { error: insertError } = await supabase
+  //         .from("reseller_customers")
+  //         .insert({
+  //           reseller_id: reseller.id,
+  //           email: formData.email,
+  //           first_name: username,
+  //           auth_user_id: userId,
+  //         });
+
+  //       if (insertError) {
+  //         console.error("[Register] Failed to create customer:", insertError);
+  //         return;
+  //       }
+  //       console.log("[Register] ✅ Customer created for reseller:", storeSlug);
+  //     }
+
+  //     // Get customer record id for wallet
+  //     const { data: customer } = await supabase
+  //       .from("reseller_customers")
+  //       .select("id")
+  //       .eq("reseller_id", reseller.id)
+  //       .eq("email", formData.email)
+  //       .single();
+
+  //     if (customer) {
+  //       const { data: existingWallet } = await supabase
+  //         .from("reseller_customer_wallets")
+  //         .select("id")
+  //         .eq("reseller_id", reseller.id)
+  //         .eq("customer_id", customer.id)
+  //         .single();
+
+  //       if (!existingWallet) {
+  //         await supabase.from("reseller_customer_wallets").insert({
+  //           reseller_id: reseller.id,
+  //           customer_id: customer.id,
+  //           balance: 0,
+  //           total_spent: 0,
+  //         });
+  //         console.log("[Register] ✅ Customer wallet created");
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error(
+  //       "[Register] Error registering customer",
+  //       error,
+  //     );
+  //   }
+  // };
+
+  const registerCustomerToReseller = async (
+    userId: string,
+    originalEmail: string,
+    authEmail: string,
+  ) => {
     try {
       const storeSlug = useResellerStore.getState().config.storeName;
-      const username = formData.email.split("@")[0];
+      const username = originalEmail.split("@")[0];
 
       const { data: reseller, error: resellerError } = await supabase
         .from("resellers")
@@ -101,31 +199,33 @@ export default function RegisterScreen() {
         return;
       }
 
+      // Check if customer already exists
       const { data: existingCustomer } = await supabase
         .from("reseller_customers")
-        .select("id, auth_user_id")
+        .select("id, auth_user_id, auth_email")
         .eq("reseller_id", reseller.id)
-        .eq("email", formData.email)
+        .eq("email", originalEmail)
         .single();
 
       if (existingCustomer) {
-        if (!existingCustomer.auth_user_id) {
+        const updates: any = {};
+        if (!existingCustomer.auth_user_id) updates.auth_user_id = userId;
+        if (!existingCustomer.auth_email) updates.auth_email = authEmail;
+
+        if (Object.keys(updates).length > 0) {
           await supabase
             .from("reseller_customers")
-            .update({ auth_user_id: userId })
+            .update(updates)
             .eq("id", existingCustomer.id);
-          console.log("[Register] ✅ Customer updated with auth_user_id");
-        } else {
-          console.log(
-            "[Register] Customer already registered with this reseller",
-          );
         }
       } else {
+        // Create new customer with auth_email
         const { error: insertError } = await supabase
           .from("reseller_customers")
           .insert({
             reseller_id: reseller.id,
-            email: formData.email,
+            email: originalEmail,
+            auth_email: authEmail,
             first_name: username,
             auth_user_id: userId,
           });
@@ -134,15 +234,14 @@ export default function RegisterScreen() {
           console.error("[Register] Failed to create customer:", insertError);
           return;
         }
-        console.log("[Register] ✅ Customer created for reseller:", storeSlug);
       }
 
-      // Get customer record id for wallet
+      // Get or create wallet...
       const { data: customer } = await supabase
         .from("reseller_customers")
         .select("id")
         .eq("reseller_id", reseller.id)
-        .eq("email", formData.email)
+        .eq("email", originalEmail)
         .single();
 
       if (customer) {
@@ -160,14 +259,10 @@ export default function RegisterScreen() {
             balance: 0,
             total_spent: 0,
           });
-          console.log("[Register] ✅ Customer wallet created");
         }
       }
     } catch (error) {
-      console.error(
-        "[Register] Error registering customer to reseller:",
-        error,
-      );
+      console.error("[Register] Error:", error);
     }
   };
 
@@ -199,6 +294,7 @@ export default function RegisterScreen() {
           data: {
             username: username,
             role: "customer",
+            original_email: formData.email,
           },
         },
       });
@@ -206,7 +302,7 @@ export default function RegisterScreen() {
       if (error) throw error;
 
       if (user) {
-        await registerCustomerToReseller(user.id);
+        await registerCustomerToReseller(user.id, formData.email, storeEmail);
       }
 
       if (session) {

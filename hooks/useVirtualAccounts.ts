@@ -124,124 +124,36 @@ export function useCreateVirtualAccount() {
   const storeSlug = getStoreSlug();
 
   return useMutation({
-    mutationFn: async (formData: {
-      fullName: string;
-      phoneNumber: string;
-      email: string;
-    }) => {
+    mutationFn: async () => {
       if (!user?.id) throw new Error("No user");
 
-      // ✅ Guard: fail fast if Xixapay config is missing (baked as undefined at build time)
-      const secretKey = process.env.EXPO_PUBLIC_XIXAPAY_SECRET_KEY;
-      const apiKey = process.env.EXPO_PUBLIC_XIXAPAY_API_KEY;
-      const businessId = process.env.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID;
-
-      if (!secretKey || !apiKey || !businessId) {
-        throw new Error(
-          `Missing Xixapay config: secretKey=${!!secretKey}, apiKey=${!!apiKey}, businessId=${!!businessId}. ` +
-            "Rebuild the app with the correct environment variables.",
-        );
-      }
-
-      const resellerId = await getCurrentResellerId();
-      if (!resellerId) throw new Error("Store not found");
-
-      const userType = await getUserType(user.id, resellerId);
-      if (!userType) throw new Error("User not found in this store");
-
-      // Generate unique email for this store
-      const virtualEmail = generateVirtualEmail(formData.email, storeSlug);
-
-      const table =
-        userType.type === "reseller"
-          ? "reseller_virtual_accounts"
-          : "reseller_customer_virtual_accounts";
-
-      const resellerColumn = "reseller_id";
-
-      // Check if user already has an active virtual account in this store
-      const { data: existing } = await supabase
-        .from(table)
+      const { data: reseller, error: resellerError } = await supabase
+        .from("resellers")
         .select("id")
-        .eq(resellerColumn, resellerId)
-        .eq(
-          userType.type === "reseller" ? "reseller_id" : "customer_id",
-          userType.id,
-        )
+        .eq("store_name", storeSlug)
         .eq("status", "active")
-        .limit(1);
+        .single();
 
-      if (existing?.length) {
-        throw new Error(
-          "You already have an active virtual account in this store",
-        );
-      }
+      if (resellerError || !reseller) throw new Error("Store not found");
 
-      const xixapayPayload = {
-        email: virtualEmail,
-        name: formData.fullName,
-        phoneNumber: formData.phoneNumber,
-        bankCode: ["20867"],
-        businessId,
-        accountType: "static",
-        id_type: "bvn",
-        id_number: "22222222222", // Placeholder BVN
-      };
-
-      const xixapayResponse = await fetch(
-        "https://api.xixapay.com/api/v1/createVirtualAccount",
+      const { data, error } = await supabase.functions.invoke(
+        "create-mobile-customer-virtual-account",
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${secretKey}`,
-            "api-key": apiKey,
+          body: {
+            resellerId: reseller.id,
+            storeSlug: storeSlug,
+            userId: user.id,
           },
-          body: JSON.stringify(xixapayPayload),
         },
       );
 
-      const xixapayData = await xixapayResponse.json();
-
-      if (!xixapayResponse.ok || xixapayData.status !== "success") {
-        throw new Error(
-          xixapayData.message || "Failed to create virtual account",
-        );
-      }
-
-      const bankAccounts = xixapayData.bankAccounts || [];
-      if (bankAccounts.length === 0) {
-        throw new Error("No virtual accounts were created");
-      }
-
-      // Insert into the correct table
-      const accountRecords = bankAccounts.map((bank: any) => ({
-        [resellerColumn]: resellerId,
-        ...(userType.type === "customer" && { customer_id: userType.id }),
-        bank_name: bank.bankName,
-        account_number: bank.accountNumber,
-        account_name: bank.accountName,
-        account_type: bank.accountType || "static",
-        tracking_reference: bank.Reserved_Account_Id,
-        provider: "xixapay",
-        customer_email: virtualEmail,
-        customer_name: formData.fullName,
-        customer_phone: formData.phoneNumber,
-        customer_bvn: "22222222222",
-        customer_nin: null,
-        status: "active",
-      }));
-
-      const { error: insertError } = await supabase
-        .from(table)
-        .insert(accountRecords);
-
-      if (insertError) throw insertError;
+      if (error) throw new Error(error.message);
+      if (data.error) throw new Error(data.error);
 
       return {
         success: true,
-        message: "Virtual account created successfully!",
-        virtualEmail,
+        message: data.message,
+        accounts: data.accounts,
       };
     },
     onSuccess: () => {

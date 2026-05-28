@@ -126,20 +126,49 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+      const storeSlug = useResellerStore.getState().config.storeName;
+
+      // STEP 1: Look up the customer by original email to get auth_email
+      const { data: reseller } = await supabase
+        .from("resellers")
+        .select("id")
+        .eq("store_name", storeSlug)
+        .eq("status", "active")
+        .single();
+
+      let loginEmail = email; // Default to provided email
+
+      if (reseller) {
+        const { data: customer } = await supabase
+          .from("reseller_customers")
+          .select("auth_email")
+          .eq("email", email)
+          .eq("reseller_id", reseller.id)
+          .single();
+
+        if (customer?.auth_email) {
+          // Customer found - use their stored auth email
+          loginEmail = customer.auth_email;
+        }
+      }
+
+      // STEP 2: Login with the correct email (auth_email for customers, original for resellers)
       const {
         data: { session },
         error,
       } = await supabase.auth.signInWithPassword({
-        email,
+        email: loginEmail,
         password,
       });
 
       if (error) throw error;
 
       setSession(session);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(app)/(protected)");
     } catch (error: any) {
-      Alert.alert("Login Error", error.message || "An error occurred");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Login Error", error.message || "Invalid email or password.");
     } finally {
       setIsLoading(false);
     }
