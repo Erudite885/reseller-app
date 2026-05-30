@@ -339,7 +339,7 @@ export default function HomeScreen() {
           </Text>
           <Text
             style={{
-              fontSize: Typography.sizes.xxl,
+              fontSize: Typography.sizes.xl,
               fontWeight: Typography.weights.bold,
               color: colors.text,
               textTransform: "capitalize",
