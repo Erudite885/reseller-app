@@ -94,8 +94,8 @@ export function useWallet() {
       } as Wallet;
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 30, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Auto-refetch every 60 seconds
+    staleTime: 1000 * 30 * 30, // Consider data fresh for 60 seconds
+    refetchInterval: 360000, // Auto-refetch every 360 seconds
   });
 }
 
