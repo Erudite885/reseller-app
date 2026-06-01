@@ -1,11 +1,11 @@
-// app/(app)/(protected)/index.tsx (HOME SCREEN - WITH TOAST INTEGRATION)
+// app/(app)/(protected)/index.tsx (HOME SCREEN - ONE-CLICK VIRTUAL ACCOUNT)
+
 import { PlanCarousel } from "@/components/PlanCarousel";
 import { Button, Card, Input, Toast } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import {
   getNetworkColorLight,
   getNetworkImage,
-  getPlanColor,
   NETWORK_PREFIXES,
   quickAmounts,
 } from "@/constants/helpers";
@@ -14,7 +14,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
 import { usePurchaseAirtime, usePurchaseData } from "@/hooks/usePurchaseVTU";
 import { useTheme } from "@/hooks/useTheme";
-import { useTransactionPin } from "@/hooks/useTransactionPin"; // ADD THIS
+import { useTransactionPin } from "@/hooks/useTransactionPin";
 import {
   useCreateVirtualAccount,
   useVirtualAccounts,
@@ -32,7 +32,6 @@ import {
   SafeAreaView,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -42,9 +41,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
-
-  // ADD THIS HOOK - It handles all PIN operations
-  const { validatePin, createPin, isCreatingPin } = useTransactionPin();
+  const { validatePin, createPin } = useTransactionPin();
 
   const {
     data: wallet,
@@ -58,19 +55,16 @@ export default function HomeScreen() {
   } = useVirtualAccounts();
   const createVirtualAccount = useCreateVirtualAccount();
 
-  // Get notifications data
   const { notifications } = useNotifications();
 
   // Service Selection State
   const [serviceType, setServiceType] = useState<"data" | "airtime">("data");
   const [network, setNetwork] = useState("");
-
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Add these new state variables at the top of your component:
   const [showBalance, setShowBalance] = useState(true);
   const [showAccountDetails, setShowAccountDetails] = useState(false);
 
@@ -79,16 +73,7 @@ export default function HomeScreen() {
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "error">("success");
 
-  // Virtual Account States
-  const [showCreateAccountForm, setShowCreateAccountForm] = useState(false);
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
-
-  // Form States
-  const [formData, setFormData] = useState({
-    email: profile?.email || "",
-    name: profile?.username || "",
-    phoneNumber: "",
-  });
 
   // Fetch data plans for selected network
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
@@ -97,17 +82,6 @@ export default function HomeScreen() {
   // Purchase hooks
   const purchaseDataMutation = usePurchaseData();
   const purchaseAirtimeMutation = usePurchaseAirtime();
-
-  // Update form data when profile loads
-  useEffect(() => {
-    if (profile) {
-      setFormData((prev) => ({
-        ...prev,
-        email: profile.email || prev.email,
-        name: profile.username || prev.name,
-      }));
-    }
-  }, [profile]);
 
   // Auto-detect network from phone number
   useEffect(() => {
@@ -140,7 +114,6 @@ export default function HomeScreen() {
     }
   }, [phoneNumber]);
 
-  // Format phone number as user types
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "");
     const limited = cleaned.substring(0, 11);
@@ -150,10 +123,7 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Refetch wallet, profile data, and virtual accounts
     await Promise.all([refetchWallet(), refetchVirtualAccounts()]);
-
     setRefreshing(false);
   };
 
@@ -163,25 +133,50 @@ export default function HomeScreen() {
     setToastVisible(true);
   };
 
-  // Get selected plan details
   const selectedPlan = dataPlans.find(
     (plan) => plan.plan_id === selectedPlanId,
   );
 
   // ============================================
-  // UPDATED handlePurchase Function for Your Existing System
-  // Replace the existing handlePurchase function in index.tsx
-  // Works with your process_data_purchase and process_airtime_purchase RPCs
+  // ONE-CLICK VIRTUAL ACCOUNT CREATION - NO FORM!
   // ============================================
+  const handleCreateVirtualAccount = async () => {
+    setIsProcessing(true);
+
+    try {
+      const result = await createVirtualAccount.mutateAsync();
+
+      showToast(
+        result.message || "Virtual account created successfully!",
+        "success",
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await refetchVirtualAccounts();
+
+      // Auto-close the expanded view after success
+      setTimeout(() => {
+        setShowAccountDetails(false);
+      }, 2000);
+    } catch (error: any) {
+      showToast(error.message || "Failed to create virtual account", "error");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ============================================
+  // PURCHASE HANDLER
+  // ============================================
+  const [transactionPin, setTransactionPin] = useState("");
+  const [showTransactionPin, setShowTransactionPin] = useState(false);
 
   const handlePurchase = async () => {
-    // Validate wallet
     if (!wallet) {
       showToast("Unable to load wallet balance. Please try again.", "error");
       return;
     }
 
-    // Determine purchase amount
     const purchaseAmount =
       serviceType === "data" ? selectedPlan?.price : parseFloat(amount || "0");
 
@@ -190,7 +185,6 @@ export default function HomeScreen() {
       return;
     }
 
-    // Check balance
     if (wallet.balance < purchaseAmount) {
       showToast(
         `Insufficient balance. You need ₦${purchaseAmount.toFixed(2)} but have ₦${wallet.balance.toFixed(2)}`,
@@ -200,9 +194,6 @@ export default function HomeScreen() {
       return;
     }
 
-    // ============================================
-    // TRANSACTION PIN VALIDATION (NEW)
-    // ============================================
     if (!profile) {
       showToast("Unable to load profile. Please try again.", "error");
       return;
@@ -221,7 +212,6 @@ export default function HomeScreen() {
           newPin: transactionPin,
           profileId: profile.id,
         });
-
         showToast("🎉 Transaction PIN created successfully!", "success");
         await new Promise((resolve) => setTimeout(resolve, 800));
       } catch (error: any) {
@@ -233,25 +223,19 @@ export default function HomeScreen() {
       }
     }
 
-    // ============================================
-    // END TRANSACTION PIN VALIDATION
-    // ============================================
-
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsProcessing(true);
 
     try {
       if (serviceType === "data") {
-        // Data purchase
         if (!selectedPlan) {
           throw new Error("Please select a data plan");
         }
 
-        // Your existing RPC call handles everything (wallet deduction, transaction creation, VTU API call)
         const result = await purchaseDataMutation.mutateAsync({
           plan_id: selectedPlan.plan_id,
           phoneNumber: phoneNumber,
-          transactionPin: transactionPin, // Pass PIN (for future backend validation if needed)
+          transactionPin: transactionPin,
         });
 
         if (result.success) {
@@ -260,32 +244,26 @@ export default function HomeScreen() {
             "success",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-          // Reset form
           setPhoneNumber("");
           setSelectedPlanId(null);
           setNetwork("");
-          setTransactionPin(""); // Clear PIN input
-
-          // Refresh wallet
+          setTransactionPin("");
           refetchWallet();
         } else {
-          // Provider failed, user was refunded
           showToast(
             result.message ||
               "Purchase failed. Your balance has been refunded.",
             "error",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          refetchWallet(); // refresh so user sees their balance is still intact
+          refetchWallet();
         }
       } else {
-        // Airtime purchase
         const result = await purchaseAirtimeMutation.mutateAsync({
           network: network,
           phoneNumber: phoneNumber,
           amount: purchaseAmount,
-          transactionPin: transactionPin, // Pass PIN (for future backend validation if needed)
+          transactionPin: transactionPin,
         });
 
         if (result.success) {
@@ -294,24 +272,19 @@ export default function HomeScreen() {
             "success",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-          // Reset form
           setPhoneNumber("");
           setAmount("");
           setNetwork("");
-          setTransactionPin(""); // Clear PIN input
-
-          // Refresh wallet
+          setTransactionPin("");
           refetchWallet();
         } else {
-          // Provider failed, user was refunded
           showToast(
             result.message ||
               "Purchase failed. Your balance has been refunded.",
             "error",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          refetchWallet(); // refresh so user sees their balance is still intact
+          refetchWallet();
         }
       }
     } catch (error: any) {
@@ -326,46 +299,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleFormChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // Update to index.tsx - only the handleCreateAccount function
-
-  const handleCreateAccount = async () => {
-    setIsProcessing(true);
-
-    try {
-      const result = await createVirtualAccount.mutateAsync({
-        fullName: formData.name,
-        phoneNumber: formData.phoneNumber,
-        email: formData.email,
-      });
-
-      showToast(
-        result.message || "Virtual account created successfully!",
-        "success",
-      );
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      refetchVirtualAccounts();
-
-      setTimeout(() => {
-        setShowCreateAccountForm(false);
-      }, 2000);
-    } catch (error: any) {
-      showToast(error.message || "Failed to create virtual account", "error");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const isFormValid =
-    formData.name.trim().length >= 3 &&
-    formData.phoneNumber.trim().length >= 11 &&
-    formData.email.trim().length >= 5;
-
-  // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-NG", {
       style: "currency",
@@ -374,13 +307,8 @@ export default function HomeScreen() {
     }).format(amount);
   };
 
-  // const hasTransactionPin = !!profile?.transaction_pin;
-  const [transactionPin, setTransactionPin] = useState("");
-  const [showTransactionPin, setShowTransactionPin] = useState(false);
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Toast Notification */}
       <Toast
         visible={toastVisible}
         message={toastMessage}
@@ -389,7 +317,7 @@ export default function HomeScreen() {
         duration={5000}
       />
 
-      {/* Header with Notification Bell */}
+      {/* Header */}
       <View
         style={{
           flexDirection: "row",
@@ -411,7 +339,7 @@ export default function HomeScreen() {
           </Text>
           <Text
             style={{
-              fontSize: Typography.sizes.xxl,
+              fontSize: Typography.sizes.xl,
               fontWeight: Typography.weights.bold,
               color: colors.text,
               textTransform: "capitalize",
@@ -437,7 +365,6 @@ export default function HomeScreen() {
           }}
         >
           <Text style={{ fontSize: 24 }}>🔔</Text>
-          {/* Show badge only if there are unread notifications */}
           {notifications.filter((n) => !n.isRead).length > 0 && (
             <View
               style={{
@@ -484,7 +411,6 @@ export default function HomeScreen() {
           style={{ paddingHorizontal: Spacing.md, marginBottom: Spacing.xl }}
         >
           <Card variant="elevated" padding="md">
-            {/* Balance Header with Eye Icon */}
             <View
               style={{
                 flexDirection: "row",
@@ -506,9 +432,7 @@ export default function HomeScreen() {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowBalance(!showBalance);
                 }}
-                style={{
-                  padding: Spacing.xs,
-                }}
+                style={{ padding: Spacing.xs }}
               >
                 <Text style={{ fontSize: 16 }}>
                   {showBalance ? "👁️" : "👁️‍🗨️"}
@@ -516,7 +440,6 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            {/* Balance Amount with Plus Icon */}
             <View
               style={{
                 flexDirection: "row",
@@ -545,7 +468,6 @@ export default function HomeScreen() {
                     : "₦••••••"}
                 </Text>
               )}
-              {/* Plus Icon to Toggle Account Details */}
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -574,7 +496,8 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             </View>
-            {/* Expandable Account Details or Create Form */}
+
+            {/* Expandable Account Details - ONE-CLICK VIRTUAL ACCOUNT */}
             {showAccountDetails && (
               <View
                 style={{
@@ -676,7 +599,6 @@ export default function HomeScreen() {
                                   Haptics.impactAsync(
                                     Haptics.ImpactFeedbackStyle.Light,
                                   );
-                                  // TODO: Copy to clipboard
                                   showToast(
                                     `${account.account_number} copied!`,
                                     "success",
@@ -728,7 +650,6 @@ export default function HomeScreen() {
                                   Haptics.impactAsync(
                                     Haptics.ImpactFeedbackStyle.Light,
                                   );
-                                  // TODO: Copy to clipboard
                                   showToast(
                                     `${account.account_name} copied!`,
                                     "success",
@@ -762,176 +683,45 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 ) : (
-                  // Show Create Virtual Account Form
+                  // ONE-CLICK CREATE VIRTUAL ACCOUNT - NO FORM!
                   <View>
-                    <View
+                    <Text
                       style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: Spacing.md,
+                        fontSize: Typography.sizes.base,
+                        fontWeight: Typography.weights.bold,
+                        color: colors.text,
+                        textAlign: "center",
+                        marginBottom: Spacing.xs,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: Typography.sizes.lg,
-                          fontWeight: Typography.weights.bold,
-                          color: colors.text,
-                        }}
-                      >
-                        Create Virtual Account
-                      </Text>
-                    </View>
-
+                      Create Virtual Account
+                    </Text>
                     <Text
                       style={{
                         fontSize: Typography.sizes.sm,
                         color: colors.textSecondary,
+                        textAlign: "center",
                         marginBottom: Spacing.lg,
                       }}
                     >
-                      Get your unique account number to fund your wallet easily
+                      One-click setup to fund your wallet instantly
                     </Text>
 
-                    {/* Form */}
-                    <View style={{ gap: Spacing.md }}>
-                      {/* Email */}
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: Typography.sizes.sm,
-                            color: colors.textSecondary,
-                            marginBottom: Spacing.xs,
-                          }}
-                        >
-                          Email Address
-                        </Text>
-                        <TextInput
-                          value={formData.email}
-                          onChangeText={(value) =>
-                            handleFormChange("email", value)
-                          }
-                          style={{
-                            height: 48,
-                            backgroundColor: colors.backgroundSecondary,
-                            borderRadius: Radius.sm,
-                            paddingHorizontal: Spacing.md,
-                            color: colors.text,
-                          }}
-                          placeholder="your@email.com"
-                          placeholderTextColor={colors.textSecondary}
-                          editable={!isProcessing}
-                        />
-                      </View>
+                    <Button
+                      title={
+                        isProcessing
+                          ? "Creating..."
+                          : "Create Virtual Account →"
+                      }
+                      onPress={handleCreateVirtualAccount}
+                      disabled={isProcessing}
+                      variant="primary"
+                      size="md"
+                      fullWidth
+                      loading={isProcessing}
+                    />
 
-                      {/* Full Name */}
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: Typography.sizes.sm,
-                            color: colors.textSecondary,
-                            marginBottom: Spacing.xs,
-                          }}
-                        >
-                          Username{" "}
-                          <Text style={{ color: colors.error }}>*</Text>
-                        </Text>
-                        <TextInput
-                          value={formData.name}
-                          onChangeText={(value) =>
-                            handleFormChange("name", value)
-                          }
-                          style={{
-                            height: 48,
-                            backgroundColor: colors.backgroundSecondary,
-                            borderRadius: Radius.sm,
-                            paddingHorizontal: Spacing.md,
-                            color: colors.text,
-                          }}
-                          placeholder="John Doe"
-                          placeholderTextColor={colors.textSecondary}
-                          editable={!isProcessing}
-                        />
-                      </View>
-
-                      {/* Phone Number */}
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: Typography.sizes.sm,
-                            color: colors.textSecondary,
-                            marginBottom: Spacing.xs,
-                          }}
-                        >
-                          Phone Number{" "}
-                          <Text style={{ color: colors.error }}>*</Text>
-                        </Text>
-                        <TextInput
-                          value={formData.phoneNumber}
-                          onChangeText={(value) =>
-                            handleFormChange("phoneNumber", value)
-                          }
-                          style={{
-                            height: 48,
-                            backgroundColor: colors.backgroundSecondary,
-                            borderRadius: Radius.sm,
-                            paddingHorizontal: Spacing.md,
-                            color: colors.text,
-                          }}
-                          placeholder="08012345678"
-                          placeholderTextColor={colors.textSecondary}
-                          keyboardType="numeric"
-                          maxLength={11}
-                          editable={!isProcessing}
-                        />
-                      </View>
-
-                      {/* Submit Button */}
-                      <Button
-                        title={
-                          isProcessing
-                            ? "Creating..."
-                            : "Create Virtual Account"
-                        }
-                        onPress={handleCreateAccount}
-                        disabled={!isFormValid || isProcessing}
-                        variant="primary"
-                        size="md"
-                        fullWidth
-                        loading={isProcessing}
-                      />
-
-                      {/* Info Box */}
-                      <View
-                        style={{
-                          backgroundColor: colors.primary + "20",
-                          borderWidth: 1,
-                          borderColor: colors.primary + "40",
-                          borderRadius: Radius.md,
-                          padding: Spacing.md,
-                          marginTop: Spacing.sm,
-                        }}
-                      >
-                        {/* <Text
-                          style={{
-                            fontSize: Typography.sizes.xs,
-                            color: colors.textSecondary,
-                            marginBottom: Spacing.xs,
-                          }}
-                        >
-                          🔒 Your information is secure and encrypted.
-                        </Text> */}
-                        <Text
-                          style={{
-                            fontSize: Typography.sizes.xs,
-                            color: colors.textSecondary,
-                          }}
-                        >
-                          ⚠️ Your information is only used to create your
-                          virtual account with our banking partners (PalmPay).
-                        </Text>
-                      </View>
-                    </View>
+                   
                   </View>
                 )}
               </View>
@@ -939,6 +729,7 @@ export default function HomeScreen() {
           </Card>
         </View>
 
+        {/* Service Selection */}
         <View
           style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg }}
         >
@@ -954,7 +745,6 @@ export default function HomeScreen() {
           </Text>
           <View style={{ flexDirection: "row", gap: 0 }}>
             <Pressable
-              // key={'data'}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setServiceType("data");
@@ -974,9 +764,6 @@ export default function HomeScreen() {
                 alignItems: "center",
                 opacity: pressed ? 0.7 : 1,
                 ...shadows.sm,
-                // borderWidth: 2,
-                // borderColor:
-                //   serviceType === "data" ? colors.primary : colors.border,
               })}
             >
               <Text style={{ fontSize: 16, marginBottom: Spacing.xs }}>📱</Text>
@@ -994,7 +781,6 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={() => {
-                // key={'airtime'}
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setServiceType("airtime");
                 setSelectedPlanId(null);
@@ -1030,7 +816,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Phone Number Input with Dynamic Network Logo */}
+        {/* Phone Number Input */}
         <View
           style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg }}
         >
@@ -1069,193 +855,7 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Data Plan Selection Grid (Only for Data) */}
-        {/* {serviceType === "data" && (
-          <View
-            style={{ paddingHorizontal: Spacing.sm, marginBottom: Spacing.lg }}
-          >
-            <Text
-              style={{
-                fontSize: Typography.sizes.base,
-                fontWeight: Typography.weights.semibold,
-                color: colors.text,
-                marginBottom: Spacing.md,
-                paddingHorizontal: Spacing.lg,
-              }}
-            >
-              Select Data Plan
-            </Text>
-            {network ? (
-              <>
-                <View style={{ paddingHorizontal: Spacing.md }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: Spacing.md,
-                      backgroundColor: getNetworkColorLight(network),
-                      paddingHorizontal: Spacing.md,
-                      paddingVertical: Spacing.sm,
-                      borderRadius: Radius.full,
-                      alignSelf: "flex-start",
-                    }}
-                  >
-                    {getNetworkImage(network.toLowerCase()) && (
-                      <Image
-                        source={getNetworkImage(network.toLowerCase())!}
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: Radius.full,
-                          marginRight: Spacing.xs,
-                        }}
-                        resizeMode="contain"
-                      />
-                    )}
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.sm,
-                        fontWeight: Typography.weights.semibold,
-                        color: colors.primary,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {network} Plans
-                    </Text>
-                  </View>
-                </View>
-
-                {isDataPlansLoading ? (
-                  <View
-                    style={{
-                      alignItems: "center",
-                      paddingVertical: Spacing.lg,
-                    }}
-                  >
-                    <ActivityIndicator color={colors.primary} />
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.sm,
-                        color: colors.textSecondary,
-                        marginTop: Spacing.md,
-                      }}
-                    >
-                      Loading plans...
-                    </Text>
-                  </View>
-                ) : dataPlans.length > 0 ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                      gap: Spacing.sm,
-                    }}
-                  >
-                    {dataPlans.map((plan, index) => {
-                      const planColor = getPlanColor(index);
-                      const isSelected = selectedPlanId === plan.plan_id;
-                      return (
-                        <Pressable
-                          key={`${plan.plan_id}-${plan.price}`}
-                          onPress={() => {
-                            Haptics.impactAsync(
-                              Haptics.ImpactFeedbackStyle.Medium,
-                            );
-                            setSelectedPlanId(plan.plan_id);
-                          }}
-                          style={({ pressed }) => ({
-                            width: "30%",
-                            backgroundColor: isSelected
-                              ? colors.primary
-                              : colors.card,
-                            borderRadius: Radius.xs,
-                            padding: Spacing.md,
-                            opacity: pressed ? 0.7 : 1,
-                            ...shadows.md,
-                          })}
-                        >
-                          <Text
-                            style={{
-                              fontSize: Typography.sizes.xs * 1.33,
-                              fontWeight: Typography.weights.bold,
-                              color: isSelected ? "#FFFFFF" : colors.text,
-                              marginBottom: Spacing.xs / 2,
-                            }}
-                          >
-                            {plan.plan_name}
-                          </Text>
-
-                          <Text
-                            style={{
-                              fontSize: Typography.sizes.sm,
-                              fontWeight: Typography.weights.semibold,
-                              color: isSelected ? "#FFFFFF" : planColor,
-                              marginBottom: Spacing.xs / 2,
-                            }}
-                          >
-                            ₦{plan.price.toLocaleString()}
-                          </Text>
-
-                          <Text
-                            style={{
-                              fontSize: Typography.sizes.xs,
-                              color: isSelected
-                                ? "rgba(255, 255, 255, 0.8)"
-                                : colors.textSecondary,
-                            }}
-                          >
-                            {plan.validity}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <View
-                    style={{
-                      alignItems: "center",
-                      paddingVertical: Spacing.lg,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.base,
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      No plans available
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <View
-                style={{
-                  backgroundColor: colors.card,
-                  borderRadius: Radius.md,
-                  padding: Spacing.xl,
-                  alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ fontSize: 48, marginBottom: Spacing.sm }}>
-                  📱
-                </Text>
-                <Text
-                  style={{
-                    fontSize: Typography.sizes.base,
-                    color: colors.textSecondary,
-                    textAlign: "center",
-                  }}
-                >
-                  Enter a phone number to see available plans
-                </Text>
-              </View>
-            )}
-          </View>
-        )} */}
+        {/* Data Plans */}
         {serviceType === "data" && (
           <View
             style={{ paddingHorizontal: Spacing.sm, marginBottom: Spacing.lg }}
@@ -1386,7 +986,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Airtime Amount (Only for Airtime) */}
+        {/* Airtime Amount */}
         {serviceType === "airtime" && (
           <>
             <View
@@ -1519,7 +1119,7 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Quick Actions Section */}
+        {/* Quick Actions */}
         <View
           style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}
         >
@@ -1643,7 +1243,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Bottom Padding */}
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>

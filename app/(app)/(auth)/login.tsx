@@ -1,6 +1,4 @@
-// ============================================
 // app/(app)/(auth)/login.tsx
-// ============================================
 
 import { Button, Input } from "@/components/ui";
 import { Spacing, Typography } from "@/constants/Colors";
@@ -13,19 +11,17 @@ import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   Text,
   View,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 
-// ============================================
-// Static asset map — MUST be literal strings for Metro bundler
-// Add entries here when new default assets are added
-// ============================================
+
 const ASSET_MAP: Record<string, any> = {
   "./assets/images/icon.png": require("@/assets/images/icon.png"),
   "./assets/images/splash.png": require("@/assets/images/splash.png"),
@@ -100,6 +96,54 @@ export function getAssetSource(assetPath: string | undefined): any {
   // Fallback to icon
   return require("@/assets/images/icon.png");
 }
+// ============================================
+// Helper function to call the edge function
+// ============================================
+async function getCustomerAuthEmail(
+  originalEmail: string,
+  storeName: string,
+): Promise<string | null> {
+  try {
+    // Get the Supabase URL from your environment
+    const supabaseUrl = process.env.EXPO_PUBLIC_BIMBO_SUPABASE_URL;
+
+    if (!supabaseUrl) {
+      console.error("[Edge Function] SUPABASE_URL not configured");
+      return null;
+    }
+
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/get-customer-auth-email`;
+
+    console.log("[Edge Function] Calling:", edgeFunctionUrl);
+
+    const response = await fetch(edgeFunctionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        originalEmail: originalEmail.trim().toLowerCase(),
+        storeName: storeName.trim().toLowerCase(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      console.error("[Edge Function] Error:", data.error);
+      return null;
+    }
+
+    console.log(
+      "[Edge Function] Response:",
+      data.success ? "Found" : "Not found",
+    );
+    return data.authEmail || null;
+  } catch (error) {
+    console.error("[Edge Function] Network error:", error);
+    return null;
+  }
+}
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -115,6 +159,7 @@ export default function LoginScreen() {
   const logoSrc = getLogoSource();
 
   const handleLogin = async () => {
+    // Validation
     const newErrors = { email: "", password: "" };
     if (!email) newErrors.email = "Email is required";
     if (!password) newErrors.password = "Password is required";
@@ -125,21 +170,89 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
+
     try {
+      const storeSlug = useResellerStore.getState().config.storeName;
+      let loginEmail = email.trim().toLowerCase();
+      let loginMethod = "direct";
+
+      // STEP 1: Try to get auth_email from edge function
+      const authEmail = await getCustomerAuthEmail(email, storeSlug);
+
+      if (authEmail) {
+        // Customer found - use their stored auth email for login
+        loginEmail = authEmail;
+        loginMethod = "edge_function";
+        console.log("[Login] Using auth_email from edge function:", loginEmail);
+      } else {
+        // STEP 2: Fallback - try to find by auth_email directly in Supabase
+        console.log(
+          "[Login] No auth_email from edge function, trying fallback",
+        );
+
+        const { data: reseller, error: resellerError } = await supabase
+          .from("resellers")
+          .select("id")
+          .eq("store_name", storeSlug)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (!resellerError && reseller) {
+          const { data: customerByAuthEmail } = await supabase
+            .from("reseller_customers")
+            .select("auth_email")
+            .eq("auth_email", email.trim().toLowerCase())
+            .eq("reseller_id", reseller.id)
+            .maybeSingle();
+
+          if (customerByAuthEmail?.auth_email) {
+            loginEmail = customerByAuthEmail.auth_email;
+            loginMethod = "direct_supabase";
+            console.log("[Login] Found by auth_email in Supabase:", loginEmail);
+          }
+        }
+      }
+
+      // STEP 3: Attempt login with the determined email
+      console.log(
+        "[Login] Attempting login with:",
+        loginEmail,
+        "Method:",
+        loginMethod,
+      );
+
       const {
         data: { session },
         error,
       } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: loginEmail,
+        password: password.trim(),
       });
 
       if (error) throw error;
 
+      // Success! Save session and redirect
       setSession(session);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(app)/(protected)");
     } catch (error: any) {
-      Alert.alert("Login Error", error.message || "An error occurred");
+      console.error("[Login] Error:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+      // Provide user-friendly error messages
+      let errorMessage = "Invalid email or password. Please try again.";
+
+      if (error.message?.includes("Invalid login credentials")) {
+        errorMessage = "Invalid email or password. Please try again.";
+      } else if (error.message?.includes("Email not confirmed")) {
+        errorMessage =
+          "Please verify your email address before logging in. Check your inbox for a confirmation link.";
+      } else if (error.message?.includes("rate limit")) {
+        errorMessage =
+          "Too many login attempts. Please wait a few minutes and try again.";
+      }
+
+      Alert.alert("Login Error", errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -158,8 +271,21 @@ export default function LoginScreen() {
           padding: Spacing.xl,
         }}
       >
-        {/* Logo */}
+        {/* Logo Section */}
         <View style={{ alignItems: "center", marginBottom: Spacing.xxl }}>
+          {/* <View
+            style={{
+              width: 100,
+              height: 100,
+              backgroundColor: colors.primary,
+              borderRadius: 50,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: Spacing.md,
+            }}
+          >
+            <Text style={{ fontSize: 48 }}>📱</Text>
+          </View> */}
           <Image
             source={logoSrc}
             style={{
@@ -192,7 +318,7 @@ export default function LoginScreen() {
         {/* Form */}
         <View style={{ marginBottom: Spacing.xl }}>
           <Input
-            label="Email"
+            label="Email Address"
             placeholder="you@example.com"
             value={email}
             onChangeText={(text) => {
@@ -202,6 +328,7 @@ export default function LoginScreen() {
             error={errors.email}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
             leftIcon={<Text>📧</Text>}
             containerStyle={{ marginBottom: Spacing.lg }}
           />
@@ -250,8 +377,9 @@ export default function LoginScreen() {
 
         {/* Login Button */}
         <Button
-          title="Login"
+          title={isLoading ? "Logging in..." : "Login"}
           onPress={handleLogin}
+          disabled={isLoading}
           loading={isLoading}
           fullWidth
           size="md"
