@@ -14,28 +14,76 @@ export interface Profile {
   created_at?: string;
 }
 
+// function cleanUsername(
+//   raw: string | null | undefined,
+//   fallback = "User",
+// ): string {
+//   if (!raw || !raw.trim()) return fallback;
+//   let name = raw.trim();
+//   const plusIndex = name.indexOf("+");
+//   if (plusIndex > 0) name = name.substring(0, plusIndex);
+//   const atIndex = name.indexOf("@");
+//   if (atIndex > 0) name = name.substring(0, atIndex);
+//   return name || fallback;
+// }
+
+// function displayEmail(raw: string | null | undefined): string {
+//   if (!raw) return "";
+//   // Strip Gmail + tags entirely for display purposes
+//   const atIndex = raw.indexOf("@");
+//   if (atIndex < 0) return raw;
+//   const local = raw.substring(0, atIndex);
+//   const domain = raw.substring(atIndex);
+//   const plusIndex = local.indexOf("+");
+//   return (plusIndex > 0 ? local.substring(0, plusIndex) : local) + domain;
+// }
+
 function cleanUsername(
   raw: string | null | undefined,
   fallback = "User",
 ): string {
   if (!raw || !raw.trim()) return fallback;
   let name = raw.trim();
+
+  // First, if this looks like an email (contains @), extract the local part
+  if (name.includes("@")) {
+    name = name.split("@")[0];
+  }
+
+  // Remove everything after + (Gmail alias)
   const plusIndex = name.indexOf("+");
   if (plusIndex > 0) name = name.substring(0, plusIndex);
-  const atIndex = name.indexOf("@");
-  if (atIndex > 0) name = name.substring(0, atIndex);
+
+  // Clean up: remove any remaining special chars, keep letters, numbers, dots, underscores
+  name = name.replace(/[^\w\s\.\-]/gi, "");
+
+  // Capitalize first letter of each word for better display
+  name = name
+    .split(/[\.\-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+
   return name || fallback;
 }
 
 function displayEmail(raw: string | null | undefined): string {
   if (!raw) return "";
-  // Strip Gmail + tags entirely for display purposes
+
+  // Strip everything after + in the local part
   const atIndex = raw.indexOf("@");
   if (atIndex < 0) return raw;
+
   const local = raw.substring(0, atIndex);
   const domain = raw.substring(atIndex);
+
+  // Remove everything after + in the local part
   const plusIndex = local.indexOf("+");
-  return (plusIndex > 0 ? local.substring(0, plusIndex) : local) + domain;
+  const cleanLocal = plusIndex > 0 ? local.substring(0, plusIndex) : local;
+
+  // Capitalize the first letter for better display
+  const displayLocal = cleanLocal.charAt(0).toUpperCase() + cleanLocal.slice(1);
+
+  return displayLocal + domain;
 }
 
 export function useProfile() {
