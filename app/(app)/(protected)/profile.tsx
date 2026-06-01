@@ -274,7 +274,7 @@ export default function EditProfileScreen() {
                 color: colors.textSecondary,
               }}
             >
-              {user?.email}
+              {email}
             </Text>
           </View>
 
