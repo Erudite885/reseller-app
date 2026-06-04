@@ -337,7 +337,7 @@ function BandwidthSharingSection({
                     );
                     Alert.alert(
                       "Success",
-                      "Bandwidth sharing has been enabled! You can now earn rewards.",
+                      "Bandwidth sharing has been enabled!",
                     );
 
                     // Callback to notify parent
@@ -387,7 +387,7 @@ function BandwidthSharingSection({
             // Disabling the service
             Alert.alert(
               "Disable Bandwidth Sharing",
-              "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
+              "Are you sure you want to disable bandwidth sharing? ",
               [
                 {
                   text: "Cancel",
@@ -469,11 +469,11 @@ function BandwidthSharingSection({
     if (isLoading) return "Loading...";
     if (isAccepting) return "Enabling...";
     if (previewMode && !hasRealConsent && !hasAttemptedFirstToggle && visualEnabled)
-      return "Preview — tap to turn off";
+      return "Tap to turn off";
     if (previewMode && !hasRealConsent && hasAttemptedFirstToggle && !visualEnabled)
       return "Tap to enable bandwidth sharing";
-    if (visualEnabled) return "Active - You are earning rewards";
-    return "Inactive - No rewards being earned";
+    if (visualEnabled) return "Active ";
+    return "Inactive ";
   };
 
   const getStatusColor = () => {
@@ -688,7 +688,7 @@ function BandwidthSharingSection({
               Bandwidth Sharing
             </Text>
           </View>
-          <Text
+          {/* <Text
             style={{
               fontSize: Typography.sizes.sm,
               color: colors.textSecondary,
@@ -696,7 +696,7 @@ function BandwidthSharingSection({
             }}
           >
             Share idle bandwidth to earn rewards
-          </Text>
+          </Text> */}
           <View
             style={{
               flexDirection: "row",
@@ -733,7 +733,7 @@ function BandwidthSharingSection({
       </View>
 
       {/* Preview mode info banner */}
-      {previewMode && !hasRealConsent && (
+      {/* {previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -758,10 +758,10 @@ function BandwidthSharingSection({
               : "💡 Tap the toggle to enable bandwidth sharing and start earning rewards."}
           </Text>
         </View>
-      )}
+      )} */}
 
       {/* Info text when enabled */}
-      {visualEnabled && !previewMode && (
+      {/* {visualEnabled && !previewMode && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -782,10 +782,10 @@ function BandwidthSharingSection({
             time.
           </Text>
         </View>
-      )}
+      )} */}
 
       {/* Info text when disabled (non-preview) */}
-      {!visualEnabled && !previewMode && !hasRealConsent && (
+      {/* {!visualEnabled && !previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -806,7 +806,7 @@ function BandwidthSharingSection({
             is protected.
           </Text>
         </View>
-      )}
+      )} */}
     </View>
   );
 }
@@ -1128,7 +1128,7 @@ export default function SecurityScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingVertical: Spacing.lg }}
         >
-          {renderPreviewBanner()}
+          {/* {renderPreviewBanner()} */}
 
           <View style={{ paddingHorizontal: Spacing.lg }}>
             {/* Change Password */}
