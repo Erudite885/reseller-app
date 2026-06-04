@@ -534,12 +534,14 @@ export interface EarningsConsentGateProps {
   visible: boolean;
   onDismiss: () => void;
   onOpenSettings: () => void;
+  onConsentAccepted?: () => void; // Add this callback
 }
 
 export function EarningsConsentGate({
   visible,
   onDismiss,
   onOpenSettings,
+   onConsentAccepted, // ← Add this to the parameters
 }: EarningsConsentGateProps) {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -563,6 +565,7 @@ export function EarningsConsentGate({
     if (!isLoading) onDismiss();
   }, [isLoading, onDismiss]);
 
+  // In the main component, update the handleAccept:
   const handleAccept = useCallback(async () => {
     if (!consentGiven || isLoading) return;
     setIsLoading(true);
@@ -575,12 +578,34 @@ export function EarningsConsentGate({
         CONSENT_DECISION_ACCEPTED,
       );
       onDismiss();
+      if (onConsentAccepted) {
+        onConsentAccepted(); // Notify parent that consent was accepted
+      }
     } catch (err) {
       console.error("[EarningsConsentGate] Accept failed:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [consentGiven, isLoading, onDismiss]);
+  }, [consentGiven, isLoading, onDismiss, onConsentAccepted]);
+
+  // const handleAccept = useCallback(async () => {
+  //   if (!consentGiven || isLoading) return;
+  //   setIsLoading(true);
+  //   try {
+  //     await initialize();
+  //     await optIn();
+  //     await start();
+  //     await AsyncStorage.setItem(
+  //       CONSENT_STORAGE_KEY,
+  //       CONSENT_DECISION_ACCEPTED,
+  //     );
+  //     onDismiss();
+  //   } catch (err) {
+  //     console.error("[EarningsConsentGate] Accept failed:", err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // }, [consentGiven, isLoading, onDismiss]);
 
   const handleOpenSettings = useCallback(() => {
     if (isLoading) return;
