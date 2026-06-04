@@ -1,4 +1,3 @@
-
 // app/(app)/(protected)/security.tsx
 
 import { Button, Input } from "@/components/ui";
@@ -337,7 +336,7 @@ function BandwidthSharingSection({
                     );
                     Alert.alert(
                       "Success",
-                      "Bandwidth sharing has been enabled!",
+                      "Bandwidth sharing has been enabled! You can now earn rewards.",
                     );
 
                     // Callback to notify parent
@@ -387,7 +386,7 @@ function BandwidthSharingSection({
             // Disabling the service
             Alert.alert(
               "Disable Bandwidth Sharing",
-              "Are you sure you want to disable bandwidth sharing? ",
+              "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
               [
                 {
                   text: "Cancel",
@@ -468,12 +467,22 @@ function BandwidthSharingSection({
   const getStatusText = () => {
     if (isLoading) return "Loading...";
     if (isAccepting) return "Enabling...";
-    if (previewMode && !hasRealConsent && !hasAttemptedFirstToggle && visualEnabled)
-      return "Tap to turn off";
-    if (previewMode && !hasRealConsent && hasAttemptedFirstToggle && !visualEnabled)
+    if (
+      previewMode &&
+      !hasRealConsent &&
+      !hasAttemptedFirstToggle &&
+      visualEnabled
+    )
+      return "Preview — tap to turn off";
+    if (
+      previewMode &&
+      !hasRealConsent &&
+      hasAttemptedFirstToggle &&
+      !visualEnabled
+    )
       return "Tap to enable bandwidth sharing";
-    if (visualEnabled) return "Active ";
-    return "Inactive ";
+    if (visualEnabled) return "Active - You are earning rewards";
+    return "Inactive - No rewards being earned";
   };
 
   const getStatusColor = () => {
@@ -688,7 +697,7 @@ function BandwidthSharingSection({
               Bandwidth Sharing
             </Text>
           </View>
-          {/* <Text
+          <Text
             style={{
               fontSize: Typography.sizes.sm,
               color: colors.textSecondary,
@@ -696,7 +705,7 @@ function BandwidthSharingSection({
             }}
           >
             Share idle bandwidth to earn rewards
-          </Text> */}
+          </Text>
           <View
             style={{
               flexDirection: "row",
@@ -733,7 +742,7 @@ function BandwidthSharingSection({
       </View>
 
       {/* Preview mode info banner */}
-      {/* {previewMode && !hasRealConsent && (
+      {previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -758,10 +767,10 @@ function BandwidthSharingSection({
               : "💡 Tap the toggle to enable bandwidth sharing and start earning rewards."}
           </Text>
         </View>
-      )} */}
+      )}
 
       {/* Info text when enabled */}
-      {/* {visualEnabled && !previewMode && (
+      {visualEnabled && !previewMode && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -782,10 +791,10 @@ function BandwidthSharingSection({
             time.
           </Text>
         </View>
-      )} */}
+      )}
 
       {/* Info text when disabled (non-preview) */}
-      {/* {!visualEnabled && !previewMode && !hasRealConsent && (
+      {!visualEnabled && !previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -806,7 +815,7 @@ function BandwidthSharingSection({
             is protected.
           </Text>
         </View>
-      )} */}
+      )}
     </View>
   );
 }
@@ -1128,7 +1137,7 @@ export default function SecurityScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingVertical: Spacing.lg }}
         >
-          {/* {renderPreviewBanner()} */}
+          {renderPreviewBanner()}
 
           <View style={{ paddingHorizontal: Spacing.lg }}>
             {/* Change Password */}
@@ -1201,12 +1210,14 @@ export default function SecurityScreen() {
               </Text>
             </Pressable>
 
-            {/* Bandwidth Sharing - New Section */}
-            <BandwidthSharingSection
-              colors={colors}
-              previewMode={previewMode}
-              onAcceptComplete={handleAcceptComplete}
-            />
+            {/* Bandwidth Sharing - only shown when coming from the consent modal */}
+            {previewMode && (
+              <BandwidthSharingSection
+                colors={colors}
+                previewMode={previewMode}
+                onAcceptComplete={handleAcceptComplete}
+              />
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1519,7 +1530,6 @@ export default function SecurityScreen() {
   return null;
 }
 
-
 // // app/(app)/(protected)/security.tsx
 
 // import { Button, Input } from "@/components/ui";
@@ -1565,14 +1575,40 @@ export default function SecurityScreen() {
 //   previewMode?: boolean;
 //   onAcceptComplete?: () => void;
 // }) {
+//   const [visualEnabled, setVisualEnabled] = useState(false);
 //   const [isEnabled, setIsEnabled] = useState(false);
 //   const [isLoading, setIsLoading] = useState(true);
 //   const [isToggling, setIsToggling] = useState(false);
 //   const [isAccepting, setIsAccepting] = useState(false);
 //   const [hasRealConsent, setHasRealConsent] = useState(false);
+//   const [hasAttemptedFirstToggle, setHasAttemptedFirstToggle] = useState(false); // Track if user has toggled at least once
 
 //   // Load initial state
 //   // Load initial state
+//   // useEffect(() => {
+//   //   async function loadState() {
+//   //     try {
+//   //       // Check if user has actually accepted consent
+//   //       const accepted = await isConsentAccepted();
+//   //       setHasRealConsent(accepted);
+
+//   //       if (!previewMode) {
+//   //         // Normal mode - show actual state
+//   //         setIsEnabled(accepted);
+//   //       } else {
+//   //         // Preview mode - show OFF initially, not ON
+//   //         // This shows the toggle as OFF but with a preview banner
+//   //         setIsEnabled(false);
+//   //       }
+//   //     } catch (error) {
+//   //       console.error("[BandwidthSharing] Error loading state:", error);
+//   //     } finally {
+//   //       setIsLoading(false);
+//   //     }
+//   //   }
+//   //   loadState();
+//   // }, [previewMode]);
+
 //   useEffect(() => {
 //     async function loadState() {
 //       try {
@@ -1582,11 +1618,11 @@ export default function SecurityScreen() {
 
 //         if (!previewMode) {
 //           // Normal mode - show actual state
-//           setIsEnabled(accepted);
+//           setVisualEnabled(accepted);
 //         } else {
-//           // Preview mode - show OFF initially, not ON
-//           // This shows the toggle as OFF but with a preview banner
-//           setIsEnabled(false);
+//           // Preview mode - start with ON (visual only) to show user what enabling looks like
+//           setVisualEnabled(true);
+//           setHasAttemptedFirstToggle(false);
 //         }
 //       } catch (error) {
 //         console.error("[BandwidthSharing] Error loading state:", error);
@@ -1597,179 +1633,382 @@ export default function SecurityScreen() {
 //     loadState();
 //   }, [previewMode]);
 
-//  const handleToggle = useCallback(
-//    async (value: boolean) => {
-//      if (isToggling || isAccepting) return;
+//   // const handleToggle = useCallback(
+//   //   async (value: boolean) => {
+//   //     if (isToggling || isAccepting) return;
 
-//      setIsToggling(true);
-//      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+//   //     setIsToggling(true);
+//   //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-//      try {
-//        if (value) {
-//          // User is trying to enable
-//          if (previewMode && !hasRealConsent) {
-//            // Coming from consent gate preview - this is the actual acceptance
-//            setIsAccepting(true);
+//   //     try {
+//   //       if (value) {
+//   //         // User is trying to enable
+//   //         if (previewMode && !hasRealConsent) {
+//   //           // Coming from consent gate preview - this is the actual acceptance
+//   //           setIsAccepting(true);
 
-//            Alert.alert(
-//              "Enable Bandwidth Sharing",
-//              "You're about to enable bandwidth sharing. Please confirm you have reviewed and agree to the terms.",
-//              [
-//                {
-//                  text: "Cancel",
-//                  style: "cancel",
-//                  onPress: () => {
-//                    setIsEnabled(false);
-//                    setIsToggling(false);
-//                    setIsAccepting(false);
-//                  },
-//                },
-//                {
-//                  text: "I Agree",
-//                  onPress: async () => {
-//                    try {
-//                      // Initialize and start the Pawns SDK
-//                      await initialize();
-//                      await optIn();
-//                      await start();
+//   //           Alert.alert(
+//   //             "Enable Bandwidth Sharing",
+//   //             "You're about to enable bandwidth sharing. Please confirm you have reviewed and agree to the terms.",
+//   //             [
+//   //               {
+//   //                 text: "Cancel",
+//   //                 style: "cancel",
+//   //                 onPress: () => {
+//   //                   setIsEnabled(false);
+//   //                   setIsToggling(false);
+//   //                   setIsAccepting(false);
+//   //                 },
+//   //               },
+//   //               {
+//   //                 text: "I Agree",
+//   //                 onPress: async () => {
+//   //                   try {
+//   //                     // Initialize and start the Pawns SDK
+//   //                     await initialize();
+//   //                     await optIn();
+//   //                     await start();
 
-//                      // Store consent decision
-//                      await AsyncStorage.setItem(
-//                        CONSENT_STORAGE_KEY,
-//                        "accepted",
-//                      );
-//                      setHasRealConsent(true);
+//   //                     // Store consent decision
+//   //                     await AsyncStorage.setItem(
+//   //                       CONSENT_STORAGE_KEY,
+//   //                       "accepted",
+//   //                     );
+//   //                     setHasRealConsent(true);
 
-//                      // Update UI state
-//                      setIsEnabled(true);
+//   //                     // Update UI state
+//   //                     setIsEnabled(true);
 
-//                      Haptics.notificationAsync(
-//                        Haptics.NotificationFeedbackType.Success,
-//                      );
-//                      Alert.alert(
-//                        "Success",
-//                        "Bandwidth sharing has been enabled! You can now earn rewards.",
-//                      );
+//   //                     Haptics.notificationAsync(
+//   //                       Haptics.NotificationFeedbackType.Success,
+//   //                     );
+//   //                     Alert.alert(
+//   //                       "Success",
+//   //                       "Bandwidth sharing has been enabled! You can now earn rewards.",
+//   //                     );
 
-//                      // Callback to notify parent
-//                      if (onAcceptComplete) {
-//                        onAcceptComplete();
-//                      }
-//                    } catch (error) {
-//                      console.error("[BandwidthSharing] Accept error:", error);
-//                      Haptics.notificationAsync(
-//                        Haptics.NotificationFeedbackType.Error,
-//                      );
-//                      Alert.alert(
-//                        "Error",
-//                        "Failed to enable bandwidth sharing. Please try again.",
-//                      );
-//                      setIsEnabled(false);
-//                    } finally {
-//                      setIsAccepting(false);
-//                      setIsToggling(false);
-//                    }
-//                  },
-//                },
-//              ],
-//            );
-//          } else if (hasRealConsent) {
-//            // Already have consent, just enabling the service
-//            try {
-//              await initialize();
-//              await optIn();
-//              await start();
-//              setIsEnabled(true);
-//              Haptics.notificationAsync(
-//                Haptics.NotificationFeedbackType.Success,
-//              );
-//            } catch (error) {
-//              console.error("[BandwidthSharing] Start error:", error);
-//              Alert.alert("Error", "Failed to start bandwidth sharing.");
-//              setIsEnabled(false);
-//            } finally {
-//              setIsToggling(false);
-//            }
-//          } else {
-//            // Should not happen - but just in case
-//            setIsEnabled(false);
-//            setIsToggling(false);
-//          }
-//        } else {
-//          // User is disabling
-//          Alert.alert(
-//            "Disable Bandwidth Sharing",
-//            "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
-//            [
-//              {
-//                text: "Cancel",
-//                style: "cancel",
-//                onPress: () => {
-//                  setIsEnabled(true);
-//                  setIsToggling(false);
-//                },
-//              },
-//              {
-//                text: "Disable",
-//                style: "destructive",
-//                onPress: async () => {
-//                  try {
-//                    await stop();
-//                    await optOut();
+//   //                     // Callback to notify parent
+//   //                     if (onAcceptComplete) {
+//   //                       onAcceptComplete();
+//   //                     }
+//   //                   } catch (error) {
+//   //                     console.error(
+//   //                       "[BandwidthSharing] Accept error:",
+//   //                       error,
+//   //                     );
+//   //                     Haptics.notificationAsync(
+//   //                       Haptics.NotificationFeedbackType.Error,
+//   //                     );
+//   //                     Alert.alert(
+//   //                       "Error",
+//   //                       "Failed to enable bandwidth sharing. Please try again.",
+//   //                     );
+//   //                     setIsEnabled(false);
+//   //                   } finally {
+//   //                     setIsAccepting(false);
+//   //                     setIsToggling(false);
+//   //                   }
+//   //                 },
+//   //               },
+//   //             ],
+//   //           );
+//   //         } else if (hasRealConsent) {
+//   //           // Already have consent, just enabling the service
+//   //           try {
+//   //             await initialize();
+//   //             await optIn();
+//   //             await start();
+//   //             setIsEnabled(true);
+//   //             Haptics.notificationAsync(
+//   //               Haptics.NotificationFeedbackType.Success,
+//   //             );
+//   //           } catch (error) {
+//   //             console.error("[BandwidthSharing] Start error:", error);
+//   //             Alert.alert("Error", "Failed to start bandwidth sharing.");
+//   //             setIsEnabled(false);
+//   //           } finally {
+//   //             setIsToggling(false);
+//   //           }
+//   //         } else {
+//   //           // Should not happen - but just in case
+//   //           setIsEnabled(false);
+//   //           setIsToggling(false);
+//   //         }
+//   //       } else {
+//   //         // User is disabling
+//   //         Alert.alert(
+//   //           "Disable Bandwidth Sharing",
+//   //           "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
+//   //           [
+//   //             {
+//   //               text: "Cancel",
+//   //               style: "cancel",
+//   //               onPress: () => {
+//   //                 setIsEnabled(true);
+//   //                 setIsToggling(false);
+//   //               },
+//   //             },
+//   //             {
+//   //               text: "Disable",
+//   //               style: "destructive",
+//   //               onPress: async () => {
+//   //                 try {
+//   //                   await stop();
+//   //                   await optOut();
 
-//                    // Only revoke consent if this is not preview mode or if they had real consent
-//                    if (!previewMode || hasRealConsent) {
-//                      await revokeConsent();
-//                      setHasRealConsent(false);
-//                    }
+//   //                   // Only revoke consent if this is not preview mode or if they had real consent
+//   //                   if (!previewMode || hasRealConsent) {
+//   //                     await revokeConsent();
+//   //                     setHasRealConsent(false);
+//   //                   }
 
-//                    setIsEnabled(false);
+//   //                   setIsEnabled(false);
 
-//                    Haptics.notificationAsync(
-//                      Haptics.NotificationFeedbackType.Success,
-//                    );
-//                    Alert.alert(
-//                      "Success",
-//                      "Bandwidth sharing has been disabled.",
-//                    );
-//                  } catch (error) {
-//                    console.error("[BandwidthSharing] Error disabling:", error);
-//                    Haptics.notificationAsync(
-//                      Haptics.NotificationFeedbackType.Error,
-//                    );
-//                    Alert.alert(
-//                      "Error",
-//                      "Failed to disable bandwidth sharing. Please try again.",
-//                    );
-//                    setIsEnabled(true);
-//                  } finally {
-//                    setIsToggling(false);
-//                  }
-//                },
-//              },
-//            ],
-//          );
-//        }
-//      } catch (error) {
-//        console.error("[BandwidthSharing] Toggle error:", error);
-//        setIsToggling(false);
-//        setIsAccepting(false);
-//      }
-//    },
-//    [isToggling, isAccepting, previewMode, hasRealConsent, onAcceptComplete],
-//  );
+//   //                   Haptics.notificationAsync(
+//   //                     Haptics.NotificationFeedbackType.Success,
+//   //                   );
+//   //                   Alert.alert(
+//   //                     "Success",
+//   //                     "Bandwidth sharing has been disabled.",
+//   //                   );
+//   //                 } catch (error) {
+//   //                   console.error(
+//   //                     "[BandwidthSharing] Error disabling:",
+//   //                     error,
+//   //                   );
+//   //                   Haptics.notificationAsync(
+//   //                     Haptics.NotificationFeedbackType.Error,
+//   //                   );
+//   //                   Alert.alert(
+//   //                     "Error",
+//   //                     "Failed to disable bandwidth sharing. Please try again.",
+//   //                   );
+//   //                   setIsEnabled(true);
+//   //                 } finally {
+//   //                   setIsToggling(false);
+//   //                 }
+//   //               },
+//   //             },
+//   //           ],
+//   //         );
+//   //       }
+//   //     } catch (error) {
+//   //       console.error("[BandwidthSharing] Toggle error:", error);
+//   //       setIsToggling(false);
+//   //       setIsAccepting(false);
+//   //     }
+//   //   },
+//   //   [isToggling, isAccepting, previewMode, hasRealConsent, onAcceptComplete],
+//   // );
+
+//   const handleToggle = useCallback(
+//     async (value: boolean) => {
+//       if (isToggling || isAccepting) return;
+
+//       setIsToggling(true);
+//       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+//       try {
+//         // PREVIEW MODE: First toggle (ON -> OFF) - just visual, no backend change
+//         if (previewMode && !hasRealConsent && !hasAttemptedFirstToggle) {
+//           console.log(
+//             "[BandwidthSharing] Preview mode - first toggle, visual only",
+//           );
+//           setVisualEnabled(false);
+//           setHasAttemptedFirstToggle(true);
+//           setIsToggling(false);
+//           return;
+//         }
+
+//         // PREVIEW MODE: Second toggle (OFF -> ON) - now actually enable
+//         if (
+//           previewMode &&
+//           !hasRealConsent &&
+//           hasAttemptedFirstToggle &&
+//           value
+//         ) {
+//           console.log(
+//             "[BandwidthSharing] Preview mode - second toggle, actually enabling",
+//           );
+//           setIsAccepting(true);
+
+//           Alert.alert(
+//             "Enable Bandwidth Sharing",
+//             "You're about to enable bandwidth sharing. Please confirm you have reviewed and agree to the terms.",
+//             [
+//               {
+//                 text: "Cancel",
+//                 style: "cancel",
+//                 onPress: () => {
+//                   setVisualEnabled(false);
+//                   // Keep hasAttemptedFirstToggle = true so toggle stays OFF,
+//                   // not back to the initial ON-preview state
+//                   setIsToggling(false);
+//                   setIsAccepting(false);
+//                 },
+//               },
+//               {
+//                 text: "I Agree",
+//                 onPress: async () => {
+//                   try {
+//                     // Initialize and start the Pawns SDK
+//                     await initialize();
+//                     await optIn();
+//                     await start();
+
+//                     // Store consent decision
+//                     await AsyncStorage.setItem(CONSENT_STORAGE_KEY, "accepted");
+//                     setHasRealConsent(true);
+
+//                     // Update UI state
+//                     setVisualEnabled(true);
+
+//                     Haptics.notificationAsync(
+//                       Haptics.NotificationFeedbackType.Success,
+//                     );
+//                     Alert.alert(
+//                       "Success",
+//                       "Bandwidth sharing has been enabled!",
+//                     );
+
+//                     // Callback to notify parent
+//                     if (onAcceptComplete) {
+//                       onAcceptComplete();
+//                     }
+//                   } catch (error) {
+//                     console.error("[BandwidthSharing] Accept error:", error);
+//                     Haptics.notificationAsync(
+//                       Haptics.NotificationFeedbackType.Error,
+//                     );
+//                     Alert.alert(
+//                       "Error",
+//                       "Failed to enable bandwidth sharing. Please try again.",
+//                     );
+//                     setVisualEnabled(false);
+//                     setHasAttemptedFirstToggle(false);
+//                   } finally {
+//                     setIsAccepting(false);
+//                     setIsToggling(false);
+//                   }
+//                 },
+//               },
+//             ],
+//           );
+//           return;
+//         }
+
+//         // Normal mode - already have consent
+//         if (hasRealConsent) {
+//           if (value) {
+//             // Enabling the service
+//             try {
+//               await initialize();
+//               await optIn();
+//               await start();
+//               setVisualEnabled(true);
+//               Haptics.notificationAsync(
+//                 Haptics.NotificationFeedbackType.Success,
+//               );
+//             } catch (error) {
+//               console.error("[BandwidthSharing] Start error:", error);
+//               Alert.alert("Error", "Failed to start bandwidth sharing.");
+//               setVisualEnabled(false);
+//             }
+//           } else {
+//             // Disabling the service
+//             Alert.alert(
+//               "Disable Bandwidth Sharing",
+//               "Are you sure you want to disable bandwidth sharing? ",
+//               [
+//                 {
+//                   text: "Cancel",
+//                   style: "cancel",
+//                   onPress: () => {
+//                     setVisualEnabled(true);
+//                     setIsToggling(false);
+//                   },
+//                 },
+//                 {
+//                   text: "Disable",
+//                   style: "destructive",
+//                   onPress: async () => {
+//                     try {
+//                       await stop();
+//                       await optOut();
+//                       await revokeConsent();
+//                       setHasRealConsent(false);
+//                       setVisualEnabled(false);
+//                       Haptics.notificationAsync(
+//                         Haptics.NotificationFeedbackType.Success,
+//                       );
+//                       Alert.alert(
+//                         "Success",
+//                         "Bandwidth sharing has been disabled.",
+//                       );
+//                     } catch (error) {
+//                       console.error(
+//                         "[BandwidthSharing] Error disabling:",
+//                         error,
+//                       );
+//                       Haptics.notificationAsync(
+//                         Haptics.NotificationFeedbackType.Error,
+//                       );
+//                       Alert.alert(
+//                         "Error",
+//                         "Failed to disable bandwidth sharing. Please try again.",
+//                       );
+//                       setVisualEnabled(true);
+//                     } finally {
+//                       setIsToggling(false);
+//                     }
+//                   },
+//                 },
+//               ],
+//             );
+//           }
+//         }
+//       } catch (error) {
+//         console.error("[BandwidthSharing] Toggle error:", error);
+//         setIsToggling(false);
+//         setIsAccepting(false);
+//       } finally {
+//         if (!isAccepting) {
+//           setIsToggling(false);
+//         }
+//       }
+//     },
+//     [
+//       isToggling,
+//       isAccepting,
+//       previewMode,
+//       hasRealConsent,
+//       hasAttemptedFirstToggle,
+//       onAcceptComplete,
+//     ],
+//   );
+
+//   // const getStatusText = () => {
+//   //   if (isLoading) return "Loading...";
+//   //   if (isAccepting) return "Enabling...";
+//   //   if (previewMode && !hasRealConsent && !isEnabled)
+//   //     return "Toggle to enable and accept terms";
+//   //   if (isEnabled) return "Active - You are earning rewards";
+//   //   return "Inactive - No rewards being earned";
+//   // };
 
 //   const getStatusText = () => {
 //     if (isLoading) return "Loading...";
 //     if (isAccepting) return "Enabling...";
-//     if (previewMode && !hasRealConsent && !isEnabled)
-//       return "Toggle to enable and accept terms";
-//     if (isEnabled) return "Active - You are earning rewards";
-//     return "Inactive - No rewards being earned";
+//     if (previewMode && !hasRealConsent && !hasAttemptedFirstToggle && visualEnabled)
+//       return "Tap to turn off";
+//     if (previewMode && !hasRealConsent && hasAttemptedFirstToggle && !visualEnabled)
+//       return "Tap to enable bandwidth sharing";
+//     if (visualEnabled) return "Active ";
+//     return "Inactive ";
 //   };
 
 //   const getStatusColor = () => {
-//     if (isEnabled) return colors.success;
+//     if (visualEnabled) return colors.success;
 //     return colors.textTertiary;
 //   };
 
@@ -1788,6 +2027,162 @@ export default function SecurityScreen() {
 //       </View>
 //     );
 //   }
+
+//   // return (
+//   //   <View
+//   //     style={{
+//   //       backgroundColor: colors.card,
+//   //       borderRadius: Radius.lg,
+//   //       padding: Spacing.lg,
+//   //       marginBottom: Spacing.md,
+//   //     }}
+//   //   >
+//   //     <View
+//   //       style={{
+//   //         flexDirection: "row",
+//   //         alignItems: "center",
+//   //         justifyContent: "space-between",
+//   //       }}
+//   //     >
+//   //       <View style={{ flex: 1 }}>
+//   //         <View
+//   //           style={{
+//   //             flexDirection: "row",
+//   //             alignItems: "center",
+//   //             marginBottom: Spacing.xs,
+//   //           }}
+//   //         >
+//   //           <Text style={{ fontSize: 20, marginRight: 8 }}>🌐</Text>
+//   //           <Text
+//   //             style={{
+//   //               fontSize: Typography.sizes.base,
+//   //               fontWeight: Typography.weights.semibold,
+//   //               color: colors.text,
+//   //             }}
+//   //           >
+//   //             Bandwidth Sharing
+//   //           </Text>
+//   //         </View>
+//   //         <Text
+//   //           style={{
+//   //             fontSize: Typography.sizes.sm,
+//   //             color: colors.textSecondary,
+//   //             marginBottom: Spacing.xs,
+//   //           }}
+//   //         >
+//   //           Share idle bandwidth to earn rewards
+//   //         </Text>
+//   //         <View
+//   //           style={{
+//   //             flexDirection: "row",
+//   //             alignItems: "center",
+//   //             marginTop: Spacing.xs,
+//   //           }}
+//   //         >
+//   //           <View
+//   //             style={{
+//   //               width: 8,
+//   //               height: 8,
+//   //               borderRadius: 4,
+//   //               backgroundColor: getStatusColor(),
+//   //               marginRight: 6,
+//   //             }}
+//   //           />
+//   //           <Text
+//   //             style={{
+//   //               fontSize: Typography.sizes.xs,
+//   //               color: getStatusColor(),
+//   //             }}
+//   //           >
+//   //             {getStatusText()}
+//   //           </Text>
+//   //         </View>
+//   //       </View>
+//   //       <Switch
+//   //         value={isEnabled}
+//   //         onValueChange={handleToggle}
+//   //         trackColor={{ false: colors.disabled, true: colors.primary }}
+//   //         thumbColor="#FFFFFF"
+//   //         disabled={isToggling || isAccepting}
+//   //       />
+//   //     </View>
+
+//   //     {/* Preview mode info banner */}
+//   //     {previewMode && (
+//   //       <View
+//   //         style={{
+//   //           marginTop: Spacing.md,
+//   //           paddingTop: Spacing.sm,
+//   //           borderTopWidth: 1,
+//   //           borderTopColor: colors.border,
+//   //           backgroundColor: colors.primary + "10",
+//   //           borderRadius: Radius.sm,
+//   //           padding: Spacing.sm,
+//   //         }}
+//   //       >
+//   //         <Text
+//   //           style={{
+//   //             fontSize: Typography.sizes.xs,
+//   //             color: colors.textSecondary,
+//   //             lineHeight: 18,
+//   //             textAlign: "center",
+//   //           }}
+//   //         >
+//   //           💡 Toggle ON to review and accept the terms. Your bandwidth sharing
+//   //           will only start after you confirm.
+//   //         </Text>
+//   //       </View>
+//   //     )}
+
+//   //     {/* Info text when enabled */}
+//   //     {isEnabled && !previewMode && (
+//   //       <View
+//   //         style={{
+//   //           marginTop: Spacing.md,
+//   //           paddingTop: Spacing.sm,
+//   //           borderTopWidth: 1,
+//   //           borderTopColor: colors.border,
+//   //         }}
+//   //       >
+//   //         <Text
+//   //           style={{
+//   //             fontSize: Typography.sizes.xs,
+//   //             color: colors.textSecondary,
+//   //             lineHeight: 18,
+//   //           }}
+//   //         >
+//   //           💡 Your device is currently sharing idle bandwidth. This uses
+//   //           minimal resources and you earn rewards. You can disable this at any
+//   //           time.
+//   //         </Text>
+//   //       </View>
+//   //     )}
+
+//   //     {/* Info text when disabled (non-preview) */}
+//   //     {!isEnabled && !previewMode && (
+//   //       <View
+//   //         style={{
+//   //           marginTop: Spacing.md,
+//   //           paddingTop: Spacing.sm,
+//   //           borderTopWidth: 1,
+//   //           borderTopColor: colors.border,
+//   //         }}
+//   //       >
+//   //         <Text
+//   //           style={{
+//   //             fontSize: Typography.sizes.xs,
+//   //             color: colors.textSecondary,
+//   //             lineHeight: 18,
+//   //           }}
+//   //         >
+//   //           💡 Enable bandwidth sharing to earn rewards by sharing your idle
+//   //           internet connection. Your data is always encrypted and your privacy
+//   //           is protected.
+//   //         </Text>
+//   //       </View>
+//   //     )}
+//   //   </View>
+//   // );
 
 //   return (
 //     <View
@@ -1824,7 +2219,7 @@ export default function SecurityScreen() {
 //               Bandwidth Sharing
 //             </Text>
 //           </View>
-//           <Text
+//           {/* <Text
 //             style={{
 //               fontSize: Typography.sizes.sm,
 //               color: colors.textSecondary,
@@ -1832,7 +2227,7 @@ export default function SecurityScreen() {
 //             }}
 //           >
 //             Share idle bandwidth to earn rewards
-//           </Text>
+//           </Text> */}
 //           <View
 //             style={{
 //               flexDirection: "row",
@@ -1860,7 +2255,7 @@ export default function SecurityScreen() {
 //           </View>
 //         </View>
 //         <Switch
-//           value={isEnabled}
+//           value={visualEnabled}
 //           onValueChange={handleToggle}
 //           trackColor={{ false: colors.disabled, true: colors.primary }}
 //           thumbColor="#FFFFFF"
@@ -1869,7 +2264,7 @@ export default function SecurityScreen() {
 //       </View>
 
 //       {/* Preview mode info banner */}
-//       {previewMode && (
+//       {/* {previewMode && !hasRealConsent && (
 //         <View
 //           style={{
 //             marginTop: Spacing.md,
@@ -1889,14 +2284,15 @@ export default function SecurityScreen() {
 //               textAlign: "center",
 //             }}
 //           >
-//             💡 Toggle ON to review and accept the terms. Your bandwidth sharing
-//             will only start after you confirm.
+//             {!hasAttemptedFirstToggle
+//               ? "💡 This is a preview — the toggle is ON but nothing is enabled yet. Tap it to turn it off, then tap again to actually enable bandwidth sharing."
+//               : "💡 Tap the toggle to enable bandwidth sharing and start earning rewards."}
 //           </Text>
 //         </View>
-//       )}
+//       )} */}
 
 //       {/* Info text when enabled */}
-//       {isEnabled && !previewMode && (
+//       {/* {visualEnabled && !previewMode && (
 //         <View
 //           style={{
 //             marginTop: Spacing.md,
@@ -1917,10 +2313,10 @@ export default function SecurityScreen() {
 //             time.
 //           </Text>
 //         </View>
-//       )}
+//       )} */}
 
 //       {/* Info text when disabled (non-preview) */}
-//       {!isEnabled && !previewMode && (
+//       {/* {!visualEnabled && !previewMode && !hasRealConsent && (
 //         <View
 //           style={{
 //             marginTop: Spacing.md,
@@ -1941,7 +2337,7 @@ export default function SecurityScreen() {
 //             is protected.
 //           </Text>
 //         </View>
-//       )}
+//       )} */}
 //     </View>
 //   );
 // }
@@ -2228,7 +2624,7 @@ export default function SecurityScreen() {
 //   // Show preview banner at top of security page when in preview mode
 //   const renderPreviewBanner = () => {
 //     if (!previewMode) return null;
-    
+
 //     return (
 //       <View
 //         style={{
@@ -2248,7 +2644,8 @@ export default function SecurityScreen() {
 //             fontWeight: Typography.weights.medium,
 //           }}
 //         >
-//           👋 Welcome! Toggle the switch below to review and accept the bandwidth sharing terms.
+//           👋 Welcome! Toggle the switch below to review and accept the bandwidth
+//           sharing terms.
 //         </Text>
 //       </View>
 //     );
@@ -2262,8 +2659,8 @@ export default function SecurityScreen() {
 //           showsVerticalScrollIndicator={false}
 //           contentContainerStyle={{ paddingVertical: Spacing.lg }}
 //         >
-//           {renderPreviewBanner()}
-          
+//           {/* {renderPreviewBanner()} */}
+
 //           <View style={{ paddingHorizontal: Spacing.lg }}>
 //             {/* Change Password */}
 //             <Pressable
@@ -2336,8 +2733,8 @@ export default function SecurityScreen() {
 //             </Pressable>
 
 //             {/* Bandwidth Sharing - New Section */}
-//             <BandwidthSharingSection 
-//               colors={colors} 
+//             <BandwidthSharingSection
+//               colors={colors}
 //               previewMode={previewMode}
 //               onAcceptComplete={handleAcceptComplete}
 //             />
@@ -2652,4 +3049,3 @@ export default function SecurityScreen() {
 
 //   return null;
 // }
-
