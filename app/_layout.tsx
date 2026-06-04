@@ -542,7 +542,10 @@ function AppContent() {
     // Use setTimeout to ensure modal is fully closed before navigation
     setTimeout(() => {
       console.log("[ConsentGate] Navigating to security page now");
-      router.push("/(app)/(protected)/security");
+      router.push({
+        pathname: "/(app)/(protected)/security",
+        params: { previewMode: "true" },
+      });
     }, 100);
   };
 
@@ -578,7 +581,8 @@ function AppContent() {
   );
 }
 
-// // app/_layout.tsx - FIXED VERSION
+
+// // app/_layout.tsx
 
 // import { Slot } from "expo-router";
 // import { StatusBar } from "expo-status-bar";
@@ -590,8 +594,7 @@ function AppContent() {
 // import * as Device from "expo-device";
 // import { useCallback, useEffect, useRef, useState } from "react";
 // import { Platform } from "react-native";
-// import { useRouter } from "expo-router";
-// import { useFocusEffect } from "expo-router";
+// import { useRouter, usePathname } from "expo-router";
 // import {
 //   EarningsConsentGate,
 //   checkAndShowConsent,
@@ -602,8 +605,6 @@ function AppContent() {
 // import { supabase } from "@/lib/supabase";
 // import { useAuthStore } from "@/store/auth.store";
 // import { useResellerStore } from "@/store/resellerStore";
-
-// // ... [all the previous push notification and setup functions remain the same] ...
 
 // // Prevent splash screen from auto-hiding
 // SplashScreen.preventAutoHideAsync();
@@ -626,7 +627,6 @@ function AppContent() {
 //   try {
 //     console.log("📱 Starting push notification registration...");
 
-//     // Set up Android notification channel
 //     if (Platform.OS === "android") {
 //       await Notifications.setNotificationChannelAsync("default", {
 //         name: "default",
@@ -645,13 +645,11 @@ function AppContent() {
 //       console.log("✅ Android notification channel created");
 //     }
 
-//     // Check if it's a physical device
 //     if (!Device.isDevice) {
 //       console.log("⚠️ Physical device required for push notifications");
 //       return null;
 //     }
 
-//     // Check/request permissions
 //     const { status: existingStatus } =
 //       await Notifications.getPermissionsAsync();
 //     let finalStatus = existingStatus;
@@ -668,7 +666,6 @@ function AppContent() {
 
 //     console.log("✅ Notification permission granted");
 
-//     // Get Expo push token - Use the project ID from app.config.ts
 //     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
 
 //     const { data: token } = await Notifications.getExpoPushTokenAsync({
@@ -678,7 +675,6 @@ function AppContent() {
 //     console.log("✅ Expo push token obtained successfully");
 //     return token;
 //   } catch (error: any) {
-//     // This catches the Firebase error and ignores it
 //     console.log(
 //       "⚠️ Push notification error (safe to ignore):",
 //       error?.message || "Unknown error",
@@ -694,7 +690,6 @@ function AppContent() {
 //   try {
 //     const storeSlug = useResellerStore.getState().config.storeName;
 
-//     // Check if user is a reseller
 //     const { data: reseller } = await supabase
 //       .from("resellers")
 //       .select("push_token, notifications_enabled")
@@ -709,7 +704,6 @@ function AppContent() {
 //       return hasToken;
 //     }
 
-//     // Check if user is a customer
 //     const { data: resellerStore } = await supabase
 //       .from("resellers")
 //       .select("id")
@@ -750,7 +744,6 @@ function AppContent() {
 //     const storeSlug = useResellerStore.getState().config.storeName;
 //     console.log("💾 Saving push token to database for user:", userId);
 
-//     // Try to save as reseller first
 //     const { data: reseller } = await supabase
 //       .from("resellers")
 //       .select("id")
@@ -773,7 +766,6 @@ function AppContent() {
 //       }
 //     }
 
-//     // Try to save as customer
 //     const { data: resellerStore } = await supabase
 //       .from("resellers")
 //       .select("id")
@@ -833,7 +825,6 @@ function AppContent() {
 //       return;
 //     }
 
-//     // Check if customer exists
 //     const { data: existingCustomer } = await supabase
 //       .from("reseller_customers")
 //       .select("id, auth_user_id")
@@ -866,7 +857,6 @@ function AppContent() {
 //       if (newCustomer) customerId = newCustomer.id;
 //     }
 
-//     // Create wallet if needed
 //     if (customerId) {
 //       const { data: existingWallet } = await supabase
 //         .from("reseller_customer_wallets")
@@ -880,17 +870,22 @@ function AppContent() {
 //           reseller_id: reseller.id,
 //           customer_id: customerId,
 //           balance: 0,
+//           total_spent: 0,
 //         });
+//         console.log("[Auth] ✅ Customer wallet created");
 //       }
 //     }
 
-//     console.log("✅ Customer setup completed for reseller");
+//     console.log("[Auth] ✅ Customer setup complete");
 //   } catch (error) {
-//     console.error("[Auth] Error setting up customer for reseller:", error);
+//     console.error("[Auth] Error setting up customer:", error);
 //   }
 // }
 
-// export function RootLayout() {
+// // ============================================
+// // Root Layout Component
+// // ============================================
+// export default function RootLayout() {
 //   return (
 //     <GestureHandlerRootView style={{ flex: 1 }}>
 //       <SafeAreaProvider>
@@ -909,12 +904,14 @@ function AppContent() {
 //   const { isDark } = useTheme();
 //   const { user, setSession } = useAuthStore();
 //   const router = useRouter();
+//   const pathname = usePathname();
 //   const realtimeSubscriptionRef = useRef<any>(null);
 
 //   // ─── Consent Gate State ────────────────────────────────────────────────
 //   const [showConsentGate, setShowConsentGate] = useState(false);
 //   const [isCheckingConsent, setIsCheckingConsent] = useState(true);
-//   const [comingFromSecurityPage, setComingFromSecurityPage] = useState(false);
+//   const [isNavigatingToSettings, setIsNavigatingToSettings] = useState(false);
+//   const [previousPathname, setPreviousPathname] = useState<string>("");
 
 //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
 //   useEffect(() => {
@@ -924,7 +921,6 @@ function AppContent() {
 //       try {
 //         console.log("🚀 Initializing app...");
 
-//         // Get current session
 //         const {
 //           data: { session },
 //         } = await supabase.auth.getSession();
@@ -936,13 +932,11 @@ function AppContent() {
 //         if (session?.user) {
 //           console.log("👤 User found:", session.user.email);
 
-//           // Setup customer/reseller records
 //           await setupCustomerForReseller(
 //             session.user.id,
 //             session.user.email || "",
 //           );
 
-//           // ✅ Check if push token already exists before registering
 //           const hasToken = await hasExistingPushToken(session.user.id);
 
 //           if (!hasToken) {
@@ -968,7 +962,6 @@ function AppContent() {
 
 //     initializeApp();
 
-//     // Listen for auth state changes
 //     const {
 //       data: { subscription },
 //     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -978,13 +971,11 @@ function AppContent() {
 //       if (event === "SIGNED_IN" && session?.user) {
 //         console.log("👤 User signed in:", session.user.email);
 
-//         // Setup customer/reseller records
 //         await setupCustomerForReseller(
 //           session.user.id,
 //           session.user.email || "",
 //         );
 
-//         // ✅ Check if push token already exists on sign in
 //         const hasToken = await hasExistingPushToken(session.user.id);
 
 //         if (!hasToken) {
@@ -998,7 +989,6 @@ function AppContent() {
 //         }
 //       } else if (event === "SIGNED_OUT") {
 //         console.log("👋 User signed out");
-//         // Clean up realtime subscription on sign out
 //         realtimeSubscriptionRef.current?.unsubscribe();
 //         realtimeSubscriptionRef.current = null;
 //       }
@@ -1014,25 +1004,29 @@ function AppContent() {
 //   const checkConsentStatus = useCallback(async () => {
 //     if (!user?.id) return;
 
+//     if (isNavigatingToSettings) {
+//       console.log("[ConsentGate] Skipping check - navigating to settings");
+//       return;
+//     }
+
 //     try {
 //       const accepted = await isConsentAccepted();
 //       const shouldShow = await checkAndShowConsent();
 
-//       // FIX #1: If coming back from security page without accepting, ALWAYS show the modal
-//       if (comingFromSecurityPage) {
-//         setShowConsentGate(true);
-//         setComingFromSecurityPage(false);
-//         return;
-//       }
+//       console.log(
+//         "[ConsentGate] Status - accepted:",
+//         accepted,
+//         "shouldShow:",
+//         shouldShow,
+//       );
 
-//       // Only show if not accepted and not suppressed
 //       if (shouldShow && !accepted) {
 //         setShowConsentGate(true);
 //       }
 //     } catch (error) {
 //       console.error("[ConsentGate] Error checking consent:", error);
 //     }
-//   }, [user?.id, comingFromSecurityPage]);
+//   }, [user?.id, isNavigatingToSettings]);
 
 //   // ─── Check consent when user logs in ───────────────────────────────────
 //   useEffect(() => {
@@ -1044,17 +1038,24 @@ function AppContent() {
 //     initialize();
 //   }, [checkConsentStatus]);
 
-//   // ─── Re-check when returning to app (focus) ───────────────────────────
-//   useFocusEffect(
-//     useCallback(() => {
-//       if (user?.id && !showConsentGate && !isCheckingConsent) {
-//         const timer = setTimeout(() => {
-//           checkConsentStatus();
-//         }, 500);
-//         return () => clearTimeout(timer);
-//       }
-//     }, [user?.id, showConsentGate, isCheckingConsent, checkConsentStatus]),
-//   );
+//   // ─── Monitor path changes to detect returning from settings ───────────
+//   useEffect(() => {
+//     const isOnSecurityPage = pathname?.includes("security");
+
+//     if (
+//       isNavigatingToSettings &&
+//       !isOnSecurityPage &&
+//       previousPathname?.includes("security")
+//     ) {
+//       console.log("[ConsentGate] Returned from settings, re-checking consent");
+//       setIsNavigatingToSettings(false);
+//       setTimeout(() => {
+//         checkConsentStatus();
+//       }, 300);
+//     }
+
+//     setPreviousPathname(pathname || "");
+//   }, [pathname, isNavigatingToSettings, checkConsentStatus, previousPathname]);
 
 //   // ─── Realtime Subscription for Notifications ───────────────────────────
 //   useEffect(() => {
@@ -1117,18 +1118,29 @@ function AppContent() {
 //   }, []);
 
 //   // ─── Handle Open Settings from Consent Gate ────────────────────────────
-//   // FIX #1: Mark that we're opening settings from consent
 //   const handleOpenSettingsFromConsent = () => {
+//     console.log("[ConsentGate] Opening settings - START");
+//     setIsNavigatingToSettings(true);
 //     setShowConsentGate(false);
-//     setComingFromSecurityPage(true); // Set flag to show modal on return
 
-//     // Use setTimeout to ensure modal is fully dismissed
+//     // Use setTimeout to ensure modal is fully closed before navigation
 //     setTimeout(() => {
-//       router.replace({
-//         pathname: "/(app)/(protected)/security",
-//         params: { fromConsent: "true" },
-//       });
+//       console.log("[ConsentGate] Navigating to security page now");
+//       router.push("/(app)/(protected)/security");
 //     }, 100);
+//   };
+
+//   // ─── Handle Consent Accepted ───────────────────────────────────────────
+//   const handleConsentAccepted = () => {
+//     console.log("[ConsentGate] Consent accepted");
+//     setShowConsentGate(false);
+//     setIsNavigatingToSettings(false);
+//   };
+
+//   // ─── Handle Dismiss ────────────────────────────────────────────────────
+//   const handleDismiss = () => {
+//     console.log("[ConsentGate] Dismissed");
+//     setShowConsentGate(false);
 //   };
 
 //   // Don't render anything while checking consent
@@ -1142,16 +1154,15 @@ function AppContent() {
 //       <Slot />
 //       <EarningsConsentGate
 //         visible={showConsentGate}
-//         onDismiss={() => setShowConsentGate(false)}
+//         onDismiss={handleDismiss}
 //         onOpenSettings={handleOpenSettingsFromConsent}
+//         onConsentAccepted={handleConsentAccepted}
 //       />
 //     </>
 //   );
 // }
 
-// export default RootLayout;
-
-// // // app/_layout.tsx
+// // // app/_layout.tsx - FIXED VERSION
 
 // // import { Slot } from "expo-router";
 // // import { StatusBar } from "expo-status-bar";
@@ -1163,7 +1174,7 @@ function AppContent() {
 // // import * as Device from "expo-device";
 // // import { useCallback, useEffect, useRef, useState } from "react";
 // // import { Platform } from "react-native";
-// // import { useRouter, useSegments } from "expo-router";
+// // import { useRouter } from "expo-router";
 // // import { useFocusEffect } from "expo-router";
 // // import {
 // //   EarningsConsentGate,
@@ -1175,6 +1186,8 @@ function AppContent() {
 // // import { supabase } from "@/lib/supabase";
 // // import { useAuthStore } from "@/store/auth.store";
 // // import { useResellerStore } from "@/store/resellerStore";
+
+// // // ... [all the previous push notification and setup functions remain the same] ...
 
 // // // Prevent splash screen from auto-hiding
 // // SplashScreen.preventAutoHideAsync();
@@ -1451,22 +1464,17 @@ function AppContent() {
 // //           reseller_id: reseller.id,
 // //           customer_id: customerId,
 // //           balance: 0,
-// //           total_spent: 0,
 // //         });
-// //         console.log("[Auth] ✅ Customer wallet created");
 // //       }
 // //     }
 
-// //     console.log("[Auth] ✅ Customer setup complete");
+// //     console.log("✅ Customer setup completed for reseller");
 // //   } catch (error) {
-// //     console.error("[Auth] Error setting up customer:", error);
+// //     console.error("[Auth] Error setting up customer for reseller:", error);
 // //   }
 // // }
 
-// // // ============================================
-// // // Root Layout Component
-// // // ============================================
-// // export default function RootLayout() {
+// // export function RootLayout() {
 // //   return (
 // //     <GestureHandlerRootView style={{ flex: 1 }}>
 // //       <SafeAreaProvider>
@@ -1485,13 +1493,12 @@ function AppContent() {
 // //   const { isDark } = useTheme();
 // //   const { user, setSession } = useAuthStore();
 // //   const router = useRouter();
-// //   const segments = useSegments();
 // //   const realtimeSubscriptionRef = useRef<any>(null);
 
 // //   // ─── Consent Gate State ────────────────────────────────────────────────
 // //   const [showConsentGate, setShowConsentGate] = useState(false);
 // //   const [isCheckingConsent, setIsCheckingConsent] = useState(true);
-// //   const [isNavigatingToSettings, setIsNavigatingToSettings] = useState(false);
+// //   const [comingFromSecurityPage, setComingFromSecurityPage] = useState(false);
 
 // //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
 // //   useEffect(() => {
@@ -1591,30 +1598,25 @@ function AppContent() {
 // //   const checkConsentStatus = useCallback(async () => {
 // //     if (!user?.id) return;
 
-// //     // Don't show if navigating to settings
-// //     if (isNavigatingToSettings) {
-// //       console.log("[ConsentGate] Skipping check - navigating to settings");
-// //       return;
-// //     }
-
 // //     try {
 // //       const accepted = await isConsentAccepted();
 // //       const shouldShow = await checkAndShowConsent();
 
-// //       console.log(
-// //         "[ConsentGate] Status - accepted:",
-// //         accepted,
-// //         "shouldShow:",
-// //         shouldShow,
-// //       );
+// //       // FIX #1: If coming back from security page without accepting, ALWAYS show the modal
+// //       if (comingFromSecurityPage) {
+// //         setShowConsentGate(true);
+// //         setComingFromSecurityPage(false);
+// //         return;
+// //       }
 
+// //       // Only show if not accepted and not suppressed
 // //       if (shouldShow && !accepted) {
 // //         setShowConsentGate(true);
 // //       }
 // //     } catch (error) {
 // //       console.error("[ConsentGate] Error checking consent:", error);
 // //     }
-// //   }, [user?.id, isNavigatingToSettings]);
+// //   }, [user?.id, comingFromSecurityPage]);
 
 // //   // ─── Check consent when user logs in ───────────────────────────────────
 // //   useEffect(() => {
@@ -1626,21 +1628,17 @@ function AppContent() {
 // //     initialize();
 // //   }, [checkConsentStatus]);
 
-// //   // ─── Monitor route changes to re-check consent when returning from settings ──
-// //   useEffect(() => {
-// //     // Check if we're on the security page
-// //     const isOnSecurityPage = segments.includes("security");
-
-// //     // If we were navigating to settings and now we're not on security page anymore
-// //     if (isNavigatingToSettings && !isOnSecurityPage) {
-// //       console.log("[ConsentGate] Returned from settings, re-checking consent");
-// //       setIsNavigatingToSettings(false);
-// //       // Small delay to ensure navigation is complete
-// //       setTimeout(() => {
-// //         checkConsentStatus();
-// //       }, 300);
-// //     }
-// //   }, [segments, isNavigatingToSettings, checkConsentStatus]);
+// //   // ─── Re-check when returning to app (focus) ───────────────────────────
+// //   useFocusEffect(
+// //     useCallback(() => {
+// //       if (user?.id && !showConsentGate && !isCheckingConsent) {
+// //         const timer = setTimeout(() => {
+// //           checkConsentStatus();
+// //         }, 500);
+// //         return () => clearTimeout(timer);
+// //       }
+// //     }, [user?.id, showConsentGate, isCheckingConsent, checkConsentStatus]),
+// //   );
 
 // //   // ─── Realtime Subscription for Notifications ───────────────────────────
 // //   useEffect(() => {
@@ -1703,26 +1701,18 @@ function AppContent() {
 // //   }, []);
 
 // //   // ─── Handle Open Settings from Consent Gate ────────────────────────────
+// //   // FIX #1: Mark that we're opening settings from consent
 // //   const handleOpenSettingsFromConsent = () => {
-// //     console.log("[ConsentGate] Opening settings");
-// //     setIsNavigatingToSettings(true);
 // //     setShowConsentGate(false);
+// //     setComingFromSecurityPage(true); // Set flag to show modal on return
 
-// //     // Navigate to security settings with preview mode
-// //     router.push("/(app)/(protected)/security?previewMode=true");
-// //   };
-
-// //   // ─── Handle Consent Accepted ───────────────────────────────────────────
-// //   const handleConsentAccepted = () => {
-// //     console.log("[ConsentGate] Consent accepted");
-// //     setShowConsentGate(false);
-// //     setIsNavigatingToSettings(false);
-// //   };
-
-// //   // ─── Handle Dismiss ────────────────────────────────────────────────────
-// //   const handleDismiss = () => {
-// //     console.log("[ConsentGate] Dismissed");
-// //     setShowConsentGate(false);
+// //     // Use setTimeout to ensure modal is fully dismissed
+// //     setTimeout(() => {
+// //       router.replace({
+// //         pathname: "/(app)/(protected)/security",
+// //         params: { fromConsent: "true" },
+// //       });
+// //     }, 100);
 // //   };
 
 // //   // Don't render anything while checking consent
@@ -1736,13 +1726,14 @@ function AppContent() {
 // //       <Slot />
 // //       <EarningsConsentGate
 // //         visible={showConsentGate}
-// //         onDismiss={handleDismiss}
+// //         onDismiss={() => setShowConsentGate(false)}
 // //         onOpenSettings={handleOpenSettingsFromConsent}
-// //         onConsentAccepted={handleConsentAccepted}
 // //       />
 // //     </>
 // //   );
 // // }
+
+// // export default RootLayout;
 
 // // // // app/_layout.tsx
 
@@ -1756,7 +1747,7 @@ function AppContent() {
 // // // import * as Device from "expo-device";
 // // // import { useCallback, useEffect, useRef, useState } from "react";
 // // // import { Platform } from "react-native";
-// // // import { useRouter } from "expo-router";
+// // // import { useRouter, useSegments } from "expo-router";
 // // // import { useFocusEffect } from "expo-router";
 // // // import {
 // // //   EarningsConsentGate,
@@ -2078,14 +2069,13 @@ function AppContent() {
 // // //   const { isDark } = useTheme();
 // // //   const { user, setSession } = useAuthStore();
 // // //   const router = useRouter();
+// // //   const segments = useSegments();
 // // //   const realtimeSubscriptionRef = useRef<any>(null);
 
 // // //   // ─── Consent Gate State ────────────────────────────────────────────────
 // // //   const [showConsentGate, setShowConsentGate] = useState(false);
 // // //   const [isCheckingConsent, setIsCheckingConsent] = useState(true);
-// // //   const [pendingConsentCheck, setPendingConsentCheck] = useState(false);
-// // //   const [waitingForSettingsReturn, setWaitingForSettingsReturn] =
-// // //     useState(false);
+// // //   const [isNavigatingToSettings, setIsNavigatingToSettings] = useState(false);
 
 // // //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
 // // //   useEffect(() => {
@@ -2181,116 +2171,60 @@ function AppContent() {
 // // //     };
 // // //   }, [setSession]);
 
-// // //   // ─── Check Consent Status After Auth ─────────────────────────────────────
-// // //   useEffect(() => {
-// // //     async function checkConsent() {
-// // //       setIsCheckingConsent(true);
-// // //       try {
-// // //         // Only show consent gate if user is logged in and hasn't accepted
-// // //         if (user?.id) {
-// // //           const accepted = await isConsentAccepted();
-// // //           const shouldShow = await checkAndShowConsent();
+// // //   // ─── Check Consent Status ─────────────────────────────────────────────
+// // //   const checkConsentStatus = useCallback(async () => {
+// // //     if (!user?.id) return;
 
-// // //           // Show consent gate if not accepted and not suppressed
-// // //           setShowConsentGate(shouldShow && !accepted);
-// // //         }
-// // //       } catch (error) {
-// // //         console.error("[ConsentGate] Error checking consent:", error);
-// // //       } finally {
-// // //         setIsCheckingConsent(false);
-// // //       }
+// // //     // Don't show if navigating to settings
+// // //     if (isNavigatingToSettings) {
+// // //       console.log("[ConsentGate] Skipping check - navigating to settings");
+// // //       return;
 // // //     }
 
-// // //     checkConsent();
-// // //   }, [user?.id]);
+// // //     try {
+// // //       const accepted = await isConsentAccepted();
+// // //       const shouldShow = await checkAndShowConsent();
 
-// // //   // ─── Check Consent Status ─────────────────────────────────────────────
+// // //       console.log(
+// // //         "[ConsentGate] Status - accepted:",
+// // //         accepted,
+// // //         "shouldShow:",
+// // //         shouldShow,
+// // //       );
 
-// // //   // ─── Check Consent Status ─────────────────────────────────────────────
-// // //   const checkConsentStatus = useCallback(
-// // //     async (skipPendingCheck = false) => {
-// // //       if (!user?.id) return;
-
-// // //       try {
-// // //         // If we're waiting for return from settings, don't show modal
-// // //         if (waitingForSettingsReturn && !skipPendingCheck) {
-// // //           console.log(
-// // //             "[ConsentGate] Waiting for return from settings, skipping check",
-// // //           );
-// // //           return;
-// // //         }
-
-// // //         const accepted = await isConsentAccepted();
-// // //         const shouldShow = await checkAndShowConsent();
-
-// // //         // Only show if not accepted and not suppressed
-// // //         if (shouldShow && !accepted && !pendingConsentCheck) {
-// // //           setShowConsentGate(true);
-// // //         }
-// // //       } catch (error) {
-// // //         console.error("[ConsentGate] Error checking consent:", error);
+// // //       if (shouldShow && !accepted) {
+// // //         setShowConsentGate(true);
 // // //       }
-// // //     },
-// // //     [user?.id, pendingConsentCheck, waitingForSettingsReturn],
-// // //   );
+// // //     } catch (error) {
+// // //       console.error("[ConsentGate] Error checking consent:", error);
+// // //     }
+// // //   }, [user?.id, isNavigatingToSettings]);
 
-// // //   // const checkConsentStatus = useCallback(async () => {
-// // //   //   if (!user?.id) return;
-
-// // //   //   try {
-// // //   //     const accepted = await isConsentAccepted();
-// // //   //     const shouldShow = await checkAndShowConsent();
-
-// // //   //     // Only show if not accepted and not suppressed and no pending check flag
-// // //   //     if (shouldShow && !accepted && !pendingConsentCheck) {
-// // //   //       setShowConsentGate(true);
-// // //   //     }
-// // //   //   } catch (error) {
-// // //   //     console.error("[ConsentGate] Error checking consent:", error);
-// // //   //   }
-// // //   // }, [user?.id, pendingConsentCheck]);
-
-// // //   // ─── Initial check ────────────────────────────────────────────────────
-
+// // //   // ─── Check consent when user logs in ───────────────────────────────────
 // // //   useEffect(() => {
 // // //     async function initialize() {
 // // //       setIsCheckingConsent(true);
-// // //       await checkConsentStatus(true); // Skip pending check on initial load
+// // //       await checkConsentStatus();
 // // //       setIsCheckingConsent(false);
 // // //     }
 // // //     initialize();
 // // //   }, [checkConsentStatus]);
 
-// // //   // ─── Re-check when returning to app (focus) ───────────────────────────
-// // //   // ─── Re-check when returning to app (focus) ───────────────────────────
-// // //   useFocusEffect(
-// // //     useCallback(() => {
-// // //       // If we're waiting for return from settings, clear that flag first
-// // //       if (waitingForSettingsReturn) {
-// // //         console.log("[ConsentGate] Returning from settings, checking consent");
-// // //         setWaitingForSettingsReturn(false);
-// // //         // Small delay to ensure settings page is fully unmounted
-// // //         const timer = setTimeout(() => {
-// // //           checkConsentStatus(true);
-// // //         }, 500);
-// // //         return () => clearTimeout(timer);
-// // //       }
+// // //   // ─── Monitor route changes to re-check consent when returning from settings ──
+// // //   useEffect(() => {
+// // //     // Check if we're on the security page
+// // //     const isOnSecurityPage = segments.includes("security");
 
-// // //       // If we're not currently showing the gate and user is logged in
-// // //       if (user?.id && !showConsentGate && !isCheckingConsent) {
-// // //         const timer = setTimeout(() => {
-// // //           checkConsentStatus();
-// // //         }, 500);
-// // //         return () => clearTimeout(timer);
-// // //       }
-// // //     }, [
-// // //       user?.id,
-// // //       showConsentGate,
-// // //       isCheckingConsent,
-// // //       checkConsentStatus,
-// // //       waitingForSettingsReturn,
-// // //     ]),
-// // //   );
+// // //     // If we were navigating to settings and now we're not on security page anymore
+// // //     if (isNavigatingToSettings && !isOnSecurityPage) {
+// // //       console.log("[ConsentGate] Returned from settings, re-checking consent");
+// // //       setIsNavigatingToSettings(false);
+// // //       // Small delay to ensure navigation is complete
+// // //       setTimeout(() => {
+// // //         checkConsentStatus();
+// // //       }, 300);
+// // //     }
+// // //   }, [segments, isNavigatingToSettings, checkConsentStatus]);
 
 // // //   // ─── Realtime Subscription for Notifications ───────────────────────────
 // // //   useEffect(() => {
@@ -2352,30 +2286,27 @@ function AppContent() {
 // // //     };
 // // //   }, []);
 
+// // //   // ─── Handle Open Settings from Consent Gate ────────────────────────────
 // // //   const handleOpenSettingsFromConsent = () => {
-// // //     setPendingConsentCheck(true);
+// // //     console.log("[ConsentGate] Opening settings");
+// // //     setIsNavigatingToSettings(true);
 // // //     setShowConsentGate(false);
-// // //     setWaitingForSettingsReturn(true); // Set flag to prevent modal from showing while in settings
 
 // // //     // Navigate to security settings with preview mode
-// // //     router.push({
-// // //       pathname: "/(app)/(protected)/security",
-// // //       params: { previewMode: "true", fromConsent: "true" },
-// // //     });
+// // //     router.push("/(app)/(protected)/security?previewMode=true");
 // // //   };
 
 // // //   // ─── Handle Consent Accepted ───────────────────────────────────────────
 // // //   const handleConsentAccepted = () => {
-// // //     // User accepted, no need to show modal again
+// // //     console.log("[ConsentGate] Consent accepted");
 // // //     setShowConsentGate(false);
-// // //     setPendingConsentCheck(false);
-// // //     setWaitingForSettingsReturn(false);
+// // //     setIsNavigatingToSettings(false);
 // // //   };
 
-// // //   // ─── Reset pending flag when consent gate is dismissed normally ───────
-// // //   const handleDismissConsent = () => {
+// // //   // ─── Handle Dismiss ────────────────────────────────────────────────────
+// // //   const handleDismiss = () => {
+// // //     console.log("[ConsentGate] Dismissed");
 // // //     setShowConsentGate(false);
-// // //     setPendingConsentCheck(false);
 // // //   };
 
 // // //   // Don't render anything while checking consent
@@ -2389,10 +2320,663 @@ function AppContent() {
 // // //       <Slot />
 // // //       <EarningsConsentGate
 // // //         visible={showConsentGate}
-// // //         onDismiss={() => setShowConsentGate(false)}
+// // //         onDismiss={handleDismiss}
 // // //         onOpenSettings={handleOpenSettingsFromConsent}
 // // //         onConsentAccepted={handleConsentAccepted}
 // // //       />
 // // //     </>
 // // //   );
 // // // }
+
+// // // // // app/_layout.tsx
+
+// // // // import { Slot } from "expo-router";
+// // // // import { StatusBar } from "expo-status-bar";
+// // // // import { QueryClientProvider } from "@tanstack/react-query";
+// // // // import { GestureHandlerRootView } from "react-native-gesture-handler";
+// // // // import { SafeAreaProvider } from "react-native-safe-area-context";
+// // // // import * as SplashScreen from "expo-splash-screen";
+// // // // import * as Notifications from "expo-notifications";
+// // // // import * as Device from "expo-device";
+// // // // import { useCallback, useEffect, useRef, useState } from "react";
+// // // // import { Platform } from "react-native";
+// // // // import { useRouter } from "expo-router";
+// // // // import { useFocusEffect } from "expo-router";
+// // // // import {
+// // // //   EarningsConsentGate,
+// // // //   checkAndShowConsent,
+// // // //   isConsentAccepted,
+// // // // } from "@/components/EarningsConsentGate";
+// // // // import { queryClient } from "@/lib/queryClient";
+// // // // import { useTheme } from "@/hooks/useTheme";
+// // // // import { supabase } from "@/lib/supabase";
+// // // // import { useAuthStore } from "@/store/auth.store";
+// // // // import { useResellerStore } from "@/store/resellerStore";
+
+// // // // // Prevent splash screen from auto-hiding
+// // // // SplashScreen.preventAutoHideAsync();
+
+// // // // // Configure notification handler
+// // // // Notifications.setNotificationHandler({
+// // // //   handleNotification: async () => ({
+// // // //     shouldShowAlert: true,
+// // // //     shouldPlaySound: true,
+// // // //     shouldSetBadge: false,
+// // // //     shouldShowBanner: true,
+// // // //     shouldShowList: true,
+// // // //   }),
+// // // // });
+
+// // // // // ============================================
+// // // // // Push Notification Registration
+// // // // // ============================================
+// // // // async function registerForPushNotificationsAsync() {
+// // // //   try {
+// // // //     console.log("📱 Starting push notification registration...");
+
+// // // //     // Set up Android notification channel
+// // // //     if (Platform.OS === "android") {
+// // // //       await Notifications.setNotificationChannelAsync("default", {
+// // // //         name: "default",
+// // // //         importance: Notifications.AndroidImportance.MAX,
+// // // //         vibrationPattern: [0, 250, 250, 250],
+// // // //         lightColor: (() => {
+// // // //           try {
+// // // //             const primaryColor =
+// // // //               useResellerStore.getState().config.theme?.primary || "#379114";
+// // // //             return primaryColor + "7c";
+// // // //           } catch {
+// // // //             return "#3791147c";
+// // // //           }
+// // // //         })(),
+// // // //       });
+// // // //       console.log("✅ Android notification channel created");
+// // // //     }
+
+// // // //     // Check if it's a physical device
+// // // //     if (!Device.isDevice) {
+// // // //       console.log("⚠️ Physical device required for push notifications");
+// // // //       return null;
+// // // //     }
+
+// // // //     // Check/request permissions
+// // // //     const { status: existingStatus } =
+// // // //       await Notifications.getPermissionsAsync();
+// // // //     let finalStatus = existingStatus;
+
+// // // //     if (existingStatus !== "granted") {
+// // // //       const { status } = await Notifications.requestPermissionsAsync();
+// // // //       finalStatus = status;
+// // // //     }
+
+// // // //     if (finalStatus !== "granted") {
+// // // //       console.log("❌ Notification permission denied");
+// // // //       return null;
+// // // //     }
+
+// // // //     console.log("✅ Notification permission granted");
+
+// // // //     // Get Expo push token - Use the project ID from app.config.ts
+// // // //     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
+
+// // // //     const { data: token } = await Notifications.getExpoPushTokenAsync({
+// // // //       projectId: projectId,
+// // // //     });
+
+// // // //     console.log("✅ Expo push token obtained successfully");
+// // // //     return token;
+// // // //   } catch (error: any) {
+// // // //     // This catches the Firebase error and ignores it
+// // // //     console.log(
+// // // //       "⚠️ Push notification error (safe to ignore):",
+// // // //       error?.message || "Unknown error",
+// // // //     );
+// // // //     return null;
+// // // //   }
+// // // // }
+
+// // // // // ============================================
+// // // // // Check if Push Token Already Exists
+// // // // // ============================================
+// // // // async function hasExistingPushToken(userId: string): Promise<boolean> {
+// // // //   try {
+// // // //     const storeSlug = useResellerStore.getState().config.storeName;
+
+// // // //     // Check if user is a reseller
+// // // //     const { data: reseller } = await supabase
+// // // //       .from("resellers")
+// // // //       .select("push_token, notifications_enabled")
+// // // //       .eq("auth_user_id", userId)
+// // // //       .maybeSingle();
+
+// // // //     if (reseller) {
+// // // //       const hasToken = !!(
+// // // //         reseller.push_token && reseller.notifications_enabled
+// // // //       );
+// // // //       console.log(`🔍 Reseller push token exists: ${hasToken}`);
+// // // //       return hasToken;
+// // // //     }
+
+// // // //     // Check if user is a customer
+// // // //     const { data: resellerStore } = await supabase
+// // // //       .from("resellers")
+// // // //       .select("id")
+// // // //       .eq("store_name", storeSlug)
+// // // //       .eq("status", "active")
+// // // //       .maybeSingle();
+
+// // // //     if (resellerStore) {
+// // // //       const { data: customer } = await supabase
+// // // //         .from("reseller_customers")
+// // // //         .select("push_token, notifications_enabled")
+// // // //         .eq("auth_user_id", userId)
+// // // //         .eq("reseller_id", resellerStore.id)
+// // // //         .maybeSingle();
+
+// // // //       if (customer) {
+// // // //         const hasToken = !!(
+// // // //           customer.push_token && customer.notifications_enabled
+// // // //         );
+// // // //         console.log(`🔍 Customer push token exists: ${hasToken}`);
+// // // //         return hasToken;
+// // // //       }
+// // // //     }
+
+// // // //     console.log("🔍 No push token found for user");
+// // // //     return false;
+// // // //   } catch (error) {
+// // // //     console.error("Error checking push token:", error);
+// // // //     return false;
+// // // //   }
+// // // // }
+
+// // // // // ============================================
+// // // // // Save Push Token to Database
+// // // // // ============================================
+// // // // async function savePushTokenToDatabase(token: string, userId: string) {
+// // // //   try {
+// // // //     const storeSlug = useResellerStore.getState().config.storeName;
+// // // //     console.log("💾 Saving push token to database for user:", userId);
+
+// // // //     // Try to save as reseller first
+// // // //     const { data: reseller } = await supabase
+// // // //       .from("resellers")
+// // // //       .select("id")
+// // // //       .eq("auth_user_id", userId)
+// // // //       .maybeSingle();
+
+// // // //     if (reseller) {
+// // // //       const { error } = await supabase
+// // // //         .from("resellers")
+// // // //         .update({
+// // // //           push_token: token,
+// // // //           notifications_enabled: true,
+// // // //           updated_at: new Date().toISOString(),
+// // // //         })
+// // // //         .eq("id", reseller.id);
+
+// // // //       if (!error) {
+// // // //         console.log("✅ Push token saved for reseller");
+// // // //         return true;
+// // // //       }
+// // // //     }
+
+// // // //     // Try to save as customer
+// // // //     const { data: resellerStore } = await supabase
+// // // //       .from("resellers")
+// // // //       .select("id")
+// // // //       .eq("store_name", storeSlug)
+// // // //       .eq("status", "active")
+// // // //       .maybeSingle();
+
+// // // //     if (resellerStore) {
+// // // //       const { data: customer } = await supabase
+// // // //         .from("reseller_customers")
+// // // //         .select("id")
+// // // //         .eq("auth_user_id", userId)
+// // // //         .eq("reseller_id", resellerStore.id)
+// // // //         .maybeSingle();
+
+// // // //       if (customer) {
+// // // //         const { error } = await supabase
+// // // //           .from("reseller_customers")
+// // // //           .update({
+// // // //             push_token: token,
+// // // //             notifications_enabled: true,
+// // // //           })
+// // // //           .eq("id", customer.id);
+
+// // // //         if (!error) {
+// // // //           console.log("✅ Push token saved for customer");
+// // // //           return true;
+// // // //         }
+// // // //       }
+// // // //     }
+
+// // // //     console.log("⚠️ Could not save push token - no matching profile");
+// // // //     return false;
+// // // //   } catch (error) {
+// // // //     console.error("❌ Error saving push token:", error);
+// // // //     return false;
+// // // //   }
+// // // // }
+
+// // // // // ============================================
+// // // // // Setup Customer for Reseller
+// // // // // ============================================
+// // // // async function setupCustomerForReseller(userId: string, userEmail: string) {
+// // // //   try {
+// // // //     const storeSlug = useResellerStore.getState().config.storeName;
+// // // //     const username = userEmail.split("@")[0];
+
+// // // //     const { data: reseller } = await supabase
+// // // //       .from("resellers")
+// // // //       .select("id, store_name")
+// // // //       .eq("store_name", storeSlug)
+// // // //       .eq("status", "active")
+// // // //       .maybeSingle();
+
+// // // //     if (!reseller) {
+// // // //       console.log("[Auth] No active reseller found for store:", storeSlug);
+// // // //       return;
+// // // //     }
+
+// // // //     // Check if customer exists
+// // // //     const { data: existingCustomer } = await supabase
+// // // //       .from("reseller_customers")
+// // // //       .select("id, auth_user_id")
+// // // //       .eq("reseller_id", reseller.id)
+// // // //       .eq("email", userEmail)
+// // // //       .maybeSingle();
+
+// // // //     let customerId: string | null = null;
+
+// // // //     if (existingCustomer) {
+// // // //       customerId = existingCustomer.id;
+// // // //       if (!existingCustomer.auth_user_id) {
+// // // //         await supabase
+// // // //           .from("reseller_customers")
+// // // //           .update({ auth_user_id: userId })
+// // // //           .eq("id", existingCustomer.id);
+// // // //       }
+// // // //     } else {
+// // // //       const { data: newCustomer } = await supabase
+// // // //         .from("reseller_customers")
+// // // //         .insert({
+// // // //           reseller_id: reseller.id,
+// // // //           email: userEmail,
+// // // //           first_name: username,
+// // // //           auth_user_id: userId,
+// // // //         })
+// // // //         .select("id")
+// // // //         .maybeSingle();
+
+// // // //       if (newCustomer) customerId = newCustomer.id;
+// // // //     }
+
+// // // //     // Create wallet if needed
+// // // //     if (customerId) {
+// // // //       const { data: existingWallet } = await supabase
+// // // //         .from("reseller_customer_wallets")
+// // // //         .select("id")
+// // // //         .eq("reseller_id", reseller.id)
+// // // //         .eq("customer_id", customerId)
+// // // //         .maybeSingle();
+
+// // // //       if (!existingWallet) {
+// // // //         await supabase.from("reseller_customer_wallets").insert({
+// // // //           reseller_id: reseller.id,
+// // // //           customer_id: customerId,
+// // // //           balance: 0,
+// // // //           total_spent: 0,
+// // // //         });
+// // // //         console.log("[Auth] ✅ Customer wallet created");
+// // // //       }
+// // // //     }
+
+// // // //     console.log("[Auth] ✅ Customer setup complete");
+// // // //   } catch (error) {
+// // // //     console.error("[Auth] Error setting up customer:", error);
+// // // //   }
+// // // // }
+
+// // // // // ============================================
+// // // // // Root Layout Component
+// // // // // ============================================
+// // // // export default function RootLayout() {
+// // // //   return (
+// // // //     <GestureHandlerRootView style={{ flex: 1 }}>
+// // // //       <SafeAreaProvider>
+// // // //         <QueryClientProvider client={queryClient}>
+// // // //           <AppContent />
+// // // //         </QueryClientProvider>
+// // // //       </SafeAreaProvider>
+// // // //     </GestureHandlerRootView>
+// // // //   );
+// // // // }
+
+// // // // // ============================================
+// // // // // App Content Component
+// // // // // ============================================
+// // // // function AppContent() {
+// // // //   const { isDark } = useTheme();
+// // // //   const { user, setSession } = useAuthStore();
+// // // //   const router = useRouter();
+// // // //   const realtimeSubscriptionRef = useRef<any>(null);
+
+// // // //   // ─── Consent Gate State ────────────────────────────────────────────────
+// // // //   const [showConsentGate, setShowConsentGate] = useState(false);
+// // // //   const [isCheckingConsent, setIsCheckingConsent] = useState(true);
+// // // //   const [pendingConsentCheck, setPendingConsentCheck] = useState(false);
+// // // //   const [waitingForSettingsReturn, setWaitingForSettingsReturn] =
+// // // //     useState(false);
+
+// // // //   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
+// // // //   useEffect(() => {
+// // // //     let mounted = true;
+
+// // // //     async function initializeApp() {
+// // // //       try {
+// // // //         console.log("🚀 Initializing app...");
+
+// // // //         // Get current session
+// // // //         const {
+// // // //           data: { session },
+// // // //         } = await supabase.auth.getSession();
+
+// // // //         if (mounted) {
+// // // //           setSession(session);
+// // // //         }
+
+// // // //         if (session?.user) {
+// // // //           console.log("👤 User found:", session.user.email);
+
+// // // //           // Setup customer/reseller records
+// // // //           await setupCustomerForReseller(
+// // // //             session.user.id,
+// // // //             session.user.email || "",
+// // // //           );
+
+// // // //           // ✅ Check if push token already exists before registering
+// // // //           const hasToken = await hasExistingPushToken(session.user.id);
+
+// // // //           if (!hasToken) {
+// // // //             console.log("📱 No existing push token, registering...");
+// // // //             const token = await registerForPushNotificationsAsync();
+// // // //             if (token) {
+// // // //               await savePushTokenToDatabase(token, session.user.id);
+// // // //             }
+// // // //           } else {
+// // // //             console.log("✅ Push token already exists - skipping registration");
+// // // //           }
+// // // //         } else {
+// // // //           console.log("👤 No user session found");
+// // // //         }
+// // // //       } catch (error) {
+// // // //         console.error("Error initializing app:", error);
+// // // //       } finally {
+// // // //         if (mounted) {
+// // // //           await SplashScreen.hideAsync();
+// // // //         }
+// // // //       }
+// // // //     }
+
+// // // //     initializeApp();
+
+// // // //     // Listen for auth state changes
+// // // //     const {
+// // // //       data: { subscription },
+// // // //     } = supabase.auth.onAuthStateChange(async (event, session) => {
+// // // //       console.log(`Auth state changed: ${event}`);
+// // // //       setSession(session);
+
+// // // //       if (event === "SIGNED_IN" && session?.user) {
+// // // //         console.log("👤 User signed in:", session.user.email);
+
+// // // //         // Setup customer/reseller records
+// // // //         await setupCustomerForReseller(
+// // // //           session.user.id,
+// // // //           session.user.email || "",
+// // // //         );
+
+// // // //         // ✅ Check if push token already exists on sign in
+// // // //         const hasToken = await hasExistingPushToken(session.user.id);
+
+// // // //         if (!hasToken) {
+// // // //           console.log("📱 No existing push token on sign in, registering...");
+// // // //           const token = await registerForPushNotificationsAsync();
+// // // //           if (token) {
+// // // //             await savePushTokenToDatabase(token, session.user.id);
+// // // //           }
+// // // //         } else {
+// // // //           console.log("✅ Push token already exists - skipping registration");
+// // // //         }
+// // // //       } else if (event === "SIGNED_OUT") {
+// // // //         console.log("👋 User signed out");
+// // // //         // Clean up realtime subscription on sign out
+// // // //         realtimeSubscriptionRef.current?.unsubscribe();
+// // // //         realtimeSubscriptionRef.current = null;
+// // // //       }
+// // // //     });
+
+// // // //     return () => {
+// // // //       mounted = false;
+// // // //       subscription.unsubscribe();
+// // // //     };
+// // // //   }, [setSession]);
+
+// // // //   // ─── Check Consent Status After Auth ─────────────────────────────────────
+// // // //   useEffect(() => {
+// // // //     async function checkConsent() {
+// // // //       setIsCheckingConsent(true);
+// // // //       try {
+// // // //         // Only show consent gate if user is logged in and hasn't accepted
+// // // //         if (user?.id) {
+// // // //           const accepted = await isConsentAccepted();
+// // // //           const shouldShow = await checkAndShowConsent();
+
+// // // //           // Show consent gate if not accepted and not suppressed
+// // // //           setShowConsentGate(shouldShow && !accepted);
+// // // //         }
+// // // //       } catch (error) {
+// // // //         console.error("[ConsentGate] Error checking consent:", error);
+// // // //       } finally {
+// // // //         setIsCheckingConsent(false);
+// // // //       }
+// // // //     }
+
+// // // //     checkConsent();
+// // // //   }, [user?.id]);
+
+// // // //   // ─── Check Consent Status ─────────────────────────────────────────────
+
+// // // //   // ─── Check Consent Status ─────────────────────────────────────────────
+// // // //   const checkConsentStatus = useCallback(
+// // // //     async (skipPendingCheck = false) => {
+// // // //       if (!user?.id) return;
+
+// // // //       try {
+// // // //         // If we're waiting for return from settings, don't show modal
+// // // //         if (waitingForSettingsReturn && !skipPendingCheck) {
+// // // //           console.log(
+// // // //             "[ConsentGate] Waiting for return from settings, skipping check",
+// // // //           );
+// // // //           return;
+// // // //         }
+
+// // // //         const accepted = await isConsentAccepted();
+// // // //         const shouldShow = await checkAndShowConsent();
+
+// // // //         // Only show if not accepted and not suppressed
+// // // //         if (shouldShow && !accepted && !pendingConsentCheck) {
+// // // //           setShowConsentGate(true);
+// // // //         }
+// // // //       } catch (error) {
+// // // //         console.error("[ConsentGate] Error checking consent:", error);
+// // // //       }
+// // // //     },
+// // // //     [user?.id, pendingConsentCheck, waitingForSettingsReturn],
+// // // //   );
+
+// // // //   // const checkConsentStatus = useCallback(async () => {
+// // // //   //   if (!user?.id) return;
+
+// // // //   //   try {
+// // // //   //     const accepted = await isConsentAccepted();
+// // // //   //     const shouldShow = await checkAndShowConsent();
+
+// // // //   //     // Only show if not accepted and not suppressed and no pending check flag
+// // // //   //     if (shouldShow && !accepted && !pendingConsentCheck) {
+// // // //   //       setShowConsentGate(true);
+// // // //   //     }
+// // // //   //   } catch (error) {
+// // // //   //     console.error("[ConsentGate] Error checking consent:", error);
+// // // //   //   }
+// // // //   // }, [user?.id, pendingConsentCheck]);
+
+// // // //   // ─── Initial check ────────────────────────────────────────────────────
+
+// // // //   useEffect(() => {
+// // // //     async function initialize() {
+// // // //       setIsCheckingConsent(true);
+// // // //       await checkConsentStatus(true); // Skip pending check on initial load
+// // // //       setIsCheckingConsent(false);
+// // // //     }
+// // // //     initialize();
+// // // //   }, [checkConsentStatus]);
+
+// // // //   // ─── Re-check when returning to app (focus) ───────────────────────────
+// // // //   // ─── Re-check when returning to app (focus) ───────────────────────────
+// // // //   useFocusEffect(
+// // // //     useCallback(() => {
+// // // //       // If we're waiting for return from settings, clear that flag first
+// // // //       if (waitingForSettingsReturn) {
+// // // //         console.log("[ConsentGate] Returning from settings, checking consent");
+// // // //         setWaitingForSettingsReturn(false);
+// // // //         // Small delay to ensure settings page is fully unmounted
+// // // //         const timer = setTimeout(() => {
+// // // //           checkConsentStatus(true);
+// // // //         }, 500);
+// // // //         return () => clearTimeout(timer);
+// // // //       }
+
+// // // //       // If we're not currently showing the gate and user is logged in
+// // // //       if (user?.id && !showConsentGate && !isCheckingConsent) {
+// // // //         const timer = setTimeout(() => {
+// // // //           checkConsentStatus();
+// // // //         }, 500);
+// // // //         return () => clearTimeout(timer);
+// // // //       }
+// // // //     }, [
+// // // //       user?.id,
+// // // //       showConsentGate,
+// // // //       isCheckingConsent,
+// // // //       checkConsentStatus,
+// // // //       waitingForSettingsReturn,
+// // // //     ]),
+// // // //   );
+
+// // // //   // ─── Realtime Subscription for Notifications ───────────────────────────
+// // // //   useEffect(() => {
+// // // //     if (!user?.id) {
+// // // //       realtimeSubscriptionRef.current?.unsubscribe();
+// // // //       realtimeSubscriptionRef.current = null;
+// // // //       return;
+// // // //     }
+
+// // // //     console.log("📡 Setting up realtime notifications for user:", user.id);
+
+// // // //     const channel = supabase
+// // // //       .channel(`notifications:${user.id}`)
+// // // //       .on(
+// // // //         "postgres_changes",
+// // // //         { event: "*", schema: "public", table: "reseller_notifications" },
+// // // //         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+// // // //       )
+// // // //       .on(
+// // // //         "postgres_changes",
+// // // //         {
+// // // //           event: "*",
+// // // //           schema: "public",
+// // // //           table: "reseller_customer_notifications",
+// // // //         },
+// // // //         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+// // // //       )
+// // // //       .subscribe();
+
+// // // //     realtimeSubscriptionRef.current = channel;
+
+// // // //     return () => {
+// // // //       console.log("🧹 Cleaning up realtime subscription");
+// // // //       channel.unsubscribe();
+// // // //       realtimeSubscriptionRef.current = null;
+// // // //     };
+// // // //   }, [user?.id]);
+
+// // // //   // ─── Push Notification Listeners ───────────────────────────────────────
+// // // //   useEffect(() => {
+// // // //     const notificationListener = Notifications.addNotificationReceivedListener(
+// // // //       () => {
+// // // //         console.log("📬 Foreground notification received");
+// // // //         queryClient.invalidateQueries({ queryKey: ["notifications"] });
+// // // //       },
+// // // //     );
+
+// // // //     const responseListener =
+// // // //       Notifications.addNotificationResponseReceivedListener((response) => {
+// // // //         console.log("👆 Notification tapped");
+// // // //         const data = response.notification.request.content.data;
+// // // //         const route = data?.route || "/(app)/(protected)/notifications";
+// // // //         router.push(route as any);
+// // // //       });
+
+// // // //     return () => {
+// // // //       notificationListener.remove();
+// // // //       responseListener.remove();
+// // // //     };
+// // // //   }, []);
+
+// // // //   const handleOpenSettingsFromConsent = () => {
+// // // //     setPendingConsentCheck(true);
+// // // //     setShowConsentGate(false);
+// // // //     setWaitingForSettingsReturn(true); // Set flag to prevent modal from showing while in settings
+
+// // // //     // Navigate to security settings with preview mode
+// // // //     router.push({
+// // // //       pathname: "/(app)/(protected)/security",
+// // // //       params: { previewMode: "true", fromConsent: "true" },
+// // // //     });
+// // // //   };
+
+// // // //   // ─── Handle Consent Accepted ───────────────────────────────────────────
+// // // //   const handleConsentAccepted = () => {
+// // // //     // User accepted, no need to show modal again
+// // // //     setShowConsentGate(false);
+// // // //     setPendingConsentCheck(false);
+// // // //     setWaitingForSettingsReturn(false);
+// // // //   };
+
+// // // //   // ─── Reset pending flag when consent gate is dismissed normally ───────
+// // // //   const handleDismissConsent = () => {
+// // // //     setShowConsentGate(false);
+// // // //     setPendingConsentCheck(false);
+// // // //   };
+
+// // // //   // Don't render anything while checking consent
+// // // //   if (isCheckingConsent) {
+// // // //     return null;
+// // // //   }
+
+// // // //   return (
+// // // //     <>
+// // // //       <StatusBar style={isDark ? "light" : "dark"} />
+// // // //       <Slot />
+// // // //       <EarningsConsentGate
+// // // //         visible={showConsentGate}
+// // // //         onDismiss={() => setShowConsentGate(false)}
+// // // //         onOpenSettings={handleOpenSettingsFromConsent}
+// // // //         onConsentAccepted={handleConsentAccepted}
+// // // //       />
+// // // //     </>
+// // // //   );
+// // // // }
