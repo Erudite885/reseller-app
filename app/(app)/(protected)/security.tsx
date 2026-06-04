@@ -35,12 +35,12 @@ import { initialize, optIn, start, stop, optOut } from "@/module/pawns";
 type SecuritySection = "password" | "pin" | "bandwidth" | "main";
 
 // Bandwidth Sharing Toggle Component
-function BandwidthSharingSection({ 
-  colors, 
+function BandwidthSharingSection({
+  colors,
   previewMode = false,
-  onAcceptComplete 
-}: { 
-  colors: any; 
+  onAcceptComplete,
+}: {
+  colors: any;
   previewMode?: boolean;
   onAcceptComplete?: () => void;
 }) {
@@ -48,17 +48,24 @@ function BandwidthSharingSection({
   const [isLoading, setIsLoading] = useState(true);
   const [isToggling, setIsToggling] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [hasRealConsent, setHasRealConsent] = useState(false);
 
+  // Load initial state
   // Load initial state
   useEffect(() => {
     async function loadState() {
       try {
+        // Check if user has actually accepted consent
+        const accepted = await isConsentAccepted();
+        setHasRealConsent(accepted);
+
         if (!previewMode) {
-          const accepted = await isConsentAccepted();
+          // Normal mode - show actual state
           setIsEnabled(accepted);
         } else {
-          // In preview mode, show as ON to demonstrate what it looks like
-          setIsEnabled(true);
+          // Preview mode - show OFF initially, not ON
+          // This shows the toggle as OFF but with a preview banner
+          setIsEnabled(false);
         }
       } catch (error) {
         console.error("[BandwidthSharing] Error loading state:", error);
@@ -69,132 +76,173 @@ function BandwidthSharingSection({
     loadState();
   }, [previewMode]);
 
-  const handleToggle = useCallback(async (value: boolean) => {
-    if (isToggling || isAccepting) return;
-    
-    setIsToggling(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+ const handleToggle = useCallback(
+   async (value: boolean) => {
+     if (isToggling || isAccepting) return;
 
-    try {
-      if (value) {
-        // User is trying to enable - this is where actual acceptance happens
-        if (previewMode) {
-          // Coming from consent gate preview - this is the actual acceptance
-          setIsAccepting(true);
-          
-          Alert.alert(
-            "Enable Bandwidth Sharing",
-            "You're about to enable bandwidth sharing. Please confirm you have reviewed and agree to the terms.",
-            [
-              { 
-                text: "Cancel", 
-                style: "cancel", 
-                onPress: () => {
-                  setIsEnabled(false);
-                  setIsToggling(false);
-                  setIsAccepting(false);
-                }
-              },
-              {
-                text: "I Agree",
-                onPress: async () => {
-                  try {
-                    // Initialize and start the Pawns SDK
-                    await initialize();
-                    await optIn();
-                    await start();
-                    
-                    // Store consent decision
-                    await AsyncStorage.setItem(CONSENT_STORAGE_KEY, "accepted");
-                    
-                    // Update UI state
-                    setIsEnabled(true);
-                    
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    Alert.alert("Success", "Bandwidth sharing has been enabled! You can now earn rewards.");
-                    
-                    // Callback to notify parent
-                    if (onAcceptComplete) {
-                      onAcceptComplete();
-                    }
-                  } catch (error) {
-                    console.error("[BandwidthSharing] Accept error:", error);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    Alert.alert("Error", "Failed to enable bandwidth sharing. Please try again.");
-                    setIsEnabled(false);
-                  } finally {
-                    setIsAccepting(false);
-                    setIsToggling(false);
-                  }
-                },
-              },
-            ]
-          );
-        } else {
-          // Normal flow - user already accepted, just enabling/disabling
-          // This would require re-initializing the SDK
-          Alert.alert(
-            "Enable Bandwidth Sharing",
-            "Reactivating bandwidth sharing...",
-            [{ text: "OK" }]
-          );
-          setIsEnabled(false);
-          setIsToggling(false);
-        }
-      } else {
-        // User is disabling - revoke consent and stop SDK
-        Alert.alert(
-          "Disable Bandwidth Sharing",
-          "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
-          [
-            { 
-              text: "Cancel", 
-              style: "cancel", 
-              onPress: () => {
-                setIsEnabled(true);
-                setIsToggling(false);
-              }
-            },
-            {
-              text: "Disable",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  setIsLoading(true);
-                  
-                  await stop();
-                  await optOut();
-                  await revokeConsent();
-                  
-                  setIsEnabled(false);
-                  
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert("Success", "Bandwidth sharing has been disabled.");
-                } catch (error) {
-                  console.error("[BandwidthSharing] Error disabling:", error);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  Alert.alert("Error", "Failed to disable bandwidth sharing. Please try again.");
-                  setIsEnabled(true);
-                } finally {
-                  setIsLoading(false);
-                  setIsToggling(false);
-                }
-              },
-            },
-          ]
-        );
-      }
-    } catch (error) {
-      console.error("[BandwidthSharing] Toggle error:", error);
-      setIsToggling(false);
-      setIsAccepting(false);
-    }
-  }, [isToggling, isAccepting, previewMode, onAcceptComplete]);
+     setIsToggling(true);
+     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+     try {
+       if (value) {
+         // User is trying to enable
+         if (previewMode && !hasRealConsent) {
+           // Coming from consent gate preview - this is the actual acceptance
+           setIsAccepting(true);
+
+           Alert.alert(
+             "Enable Bandwidth Sharing",
+             "You're about to enable bandwidth sharing. Please confirm you have reviewed and agree to the terms.",
+             [
+               {
+                 text: "Cancel",
+                 style: "cancel",
+                 onPress: () => {
+                   setIsEnabled(false);
+                   setIsToggling(false);
+                   setIsAccepting(false);
+                 },
+               },
+               {
+                 text: "I Agree",
+                 onPress: async () => {
+                   try {
+                     // Initialize and start the Pawns SDK
+                     await initialize();
+                     await optIn();
+                     await start();
+
+                     // Store consent decision
+                     await AsyncStorage.setItem(
+                       CONSENT_STORAGE_KEY,
+                       "accepted",
+                     );
+                     setHasRealConsent(true);
+
+                     // Update UI state
+                     setIsEnabled(true);
+
+                     Haptics.notificationAsync(
+                       Haptics.NotificationFeedbackType.Success,
+                     );
+                     Alert.alert(
+                       "Success",
+                       "Bandwidth sharing has been enabled! You can now earn rewards.",
+                     );
+
+                     // Callback to notify parent
+                     if (onAcceptComplete) {
+                       onAcceptComplete();
+                     }
+                   } catch (error) {
+                     console.error("[BandwidthSharing] Accept error:", error);
+                     Haptics.notificationAsync(
+                       Haptics.NotificationFeedbackType.Error,
+                     );
+                     Alert.alert(
+                       "Error",
+                       "Failed to enable bandwidth sharing. Please try again.",
+                     );
+                     setIsEnabled(false);
+                   } finally {
+                     setIsAccepting(false);
+                     setIsToggling(false);
+                   }
+                 },
+               },
+             ],
+           );
+         } else if (hasRealConsent) {
+           // Already have consent, just enabling the service
+           try {
+             await initialize();
+             await optIn();
+             await start();
+             setIsEnabled(true);
+             Haptics.notificationAsync(
+               Haptics.NotificationFeedbackType.Success,
+             );
+           } catch (error) {
+             console.error("[BandwidthSharing] Start error:", error);
+             Alert.alert("Error", "Failed to start bandwidth sharing.");
+             setIsEnabled(false);
+           } finally {
+             setIsToggling(false);
+           }
+         } else {
+           // Should not happen - but just in case
+           setIsEnabled(false);
+           setIsToggling(false);
+         }
+       } else {
+         // User is disabling
+         Alert.alert(
+           "Disable Bandwidth Sharing",
+           "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
+           [
+             {
+               text: "Cancel",
+               style: "cancel",
+               onPress: () => {
+                 setIsEnabled(true);
+                 setIsToggling(false);
+               },
+             },
+             {
+               text: "Disable",
+               style: "destructive",
+               onPress: async () => {
+                 try {
+                   await stop();
+                   await optOut();
+
+                   // Only revoke consent if this is not preview mode or if they had real consent
+                   if (!previewMode || hasRealConsent) {
+                     await revokeConsent();
+                     setHasRealConsent(false);
+                   }
+
+                   setIsEnabled(false);
+
+                   Haptics.notificationAsync(
+                     Haptics.NotificationFeedbackType.Success,
+                   );
+                   Alert.alert(
+                     "Success",
+                     "Bandwidth sharing has been disabled.",
+                   );
+                 } catch (error) {
+                   console.error("[BandwidthSharing] Error disabling:", error);
+                   Haptics.notificationAsync(
+                     Haptics.NotificationFeedbackType.Error,
+                   );
+                   Alert.alert(
+                     "Error",
+                     "Failed to disable bandwidth sharing. Please try again.",
+                   );
+                   setIsEnabled(true);
+                 } finally {
+                   setIsToggling(false);
+                 }
+               },
+             },
+           ],
+         );
+       }
+     } catch (error) {
+       console.error("[BandwidthSharing] Toggle error:", error);
+       setIsToggling(false);
+       setIsAccepting(false);
+     }
+   },
+   [isToggling, isAccepting, previewMode, hasRealConsent, onAcceptComplete],
+ );
 
   const getStatusText = () => {
     if (isLoading) return "Loading...";
     if (isAccepting) return "Enabling...";
-    if (previewMode && !isEnabled) return "Toggle to enable";
+    if (previewMode && !hasRealConsent && !isEnabled)
+      return "Toggle to enable and accept terms";
     if (isEnabled) return "Active - You are earning rewards";
     return "Inactive - No rewards being earned";
   };
@@ -206,13 +254,15 @@ function BandwidthSharingSection({
 
   if (isLoading) {
     return (
-      <View style={{ 
-        backgroundColor: colors.card, 
-        borderRadius: Radius.lg, 
-        padding: Spacing.lg, 
-        marginBottom: Spacing.md,
-        alignItems: "center" 
-      }}>
+      <View
+        style={{
+          backgroundColor: colors.card,
+          borderRadius: Radius.lg,
+          padding: Spacing.lg,
+          marginBottom: Spacing.md,
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
@@ -227,9 +277,21 @@ function BandwidthSharingSection({
         marginBottom: Spacing.md,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.xs }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: Spacing.xs,
+            }}
+          >
             <Text style={{ fontSize: 20, marginRight: 8 }}>🌐</Text>
             <Text
               style={{
@@ -250,7 +312,13 @@ function BandwidthSharingSection({
           >
             Share idle bandwidth to earn rewards
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", marginTop: Spacing.xs }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: Spacing.xs,
+            }}
+          >
             <View
               style={{
                 width: 8,
@@ -300,7 +368,8 @@ function BandwidthSharingSection({
               textAlign: "center",
             }}
           >
-            💡 Toggle ON to review and accept the terms. Your bandwidth sharing will only start after you confirm.
+            💡 Toggle ON to review and accept the terms. Your bandwidth sharing
+            will only start after you confirm.
           </Text>
         </View>
       )}
@@ -322,8 +391,9 @@ function BandwidthSharingSection({
               lineHeight: 18,
             }}
           >
-            💡 Your device is currently sharing idle bandwidth. This uses minimal resources and you earn rewards. 
-            You can disable this at any time.
+            💡 Your device is currently sharing idle bandwidth. This uses
+            minimal resources and you earn rewards. You can disable this at any
+            time.
           </Text>
         </View>
       )}
@@ -345,8 +415,9 @@ function BandwidthSharingSection({
               lineHeight: 18,
             }}
           >
-            💡 Enable bandwidth sharing to earn rewards by sharing your idle internet connection. 
-            Your data is always encrypted and your privacy is protected.
+            💡 Enable bandwidth sharing to earn rewards by sharing your idle
+            internet connection. Your data is always encrypted and your privacy
+            is protected.
           </Text>
         </View>
       )}
