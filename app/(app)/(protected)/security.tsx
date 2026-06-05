@@ -336,7 +336,7 @@ function BandwidthSharingSection({
                     );
                     Alert.alert(
                       "Success",
-                      "Bandwidth sharing has been enabled! You can now earn rewards.",
+                      "Bandwidth sharing has been enabled!",
                     );
 
                     // Callback to notify parent
@@ -386,7 +386,7 @@ function BandwidthSharingSection({
             // Disabling the service
             Alert.alert(
               "Disable Bandwidth Sharing",
-              "Are you sure you want to disable bandwidth sharing?\n\nYou will stop earning rewards from this feature immediately.",
+              "Are you sure you want to disable bandwidth sharing?",
               [
                 {
                   text: "Cancel",
@@ -473,7 +473,7 @@ function BandwidthSharingSection({
       !hasAttemptedFirstToggle &&
       visualEnabled
     )
-      return "Preview — tap to turn off";
+      return "Tap to turn off";
     if (
       previewMode &&
       !hasRealConsent &&
@@ -481,8 +481,8 @@ function BandwidthSharingSection({
       !visualEnabled
     )
       return "Tap to enable bandwidth sharing";
-    if (visualEnabled) return "Active - You are earning rewards";
-    return "Inactive - No rewards being earned";
+    if (visualEnabled) return "Active";
+    return "Inactive";
   };
 
   const getStatusColor = () => {
@@ -1100,34 +1100,34 @@ export default function SecurityScreen() {
   };
 
   // Show preview banner at top of security page when in preview mode
-  const renderPreviewBanner = () => {
-    if (!previewMode) return null;
+  // const renderPreviewBanner = () => {
+  //   if (!previewMode) return null;
 
-    return (
-      <View
-        style={{
-          backgroundColor: colors.primary + "15",
-          paddingHorizontal: Spacing.lg,
-          paddingVertical: Spacing.md,
-          marginBottom: Spacing.md,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.primary + "30",
-        }}
-      >
-        <Text
-          style={{
-            fontSize: Typography.sizes.sm,
-            color: colors.text,
-            textAlign: "center",
-            fontWeight: Typography.weights.medium,
-          }}
-        >
-          👋 Welcome! Toggle the switch below to review and accept the bandwidth
-          sharing terms.
-        </Text>
-      </View>
-    );
-  };
+  //   return (
+  //     <View
+  //       style={{
+  //         backgroundColor: colors.primary + "15",
+  //         paddingHorizontal: Spacing.lg,
+  //         paddingVertical: Spacing.md,
+  //         marginBottom: Spacing.md,
+  //         borderBottomWidth: 1,
+  //         borderBottomColor: colors.primary + "30",
+  //       }}
+  //     >
+  //       <Text
+  //         style={{
+  //           fontSize: Typography.sizes.sm,
+  //           color: colors.text,
+  //           textAlign: "center",
+  //           fontWeight: Typography.weights.medium,
+  //         }}
+  //       >
+  //         👋 Welcome! Toggle the switch below to review and accept the bandwidth
+  //         sharing terms.
+  //       </Text>
+  //     </View>
+  //   );
+  // };
 
   // Main Security Menu
   if (currentSection === "main") {
@@ -1137,7 +1137,7 @@ export default function SecurityScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingVertical: Spacing.lg }}
         >
-          {renderPreviewBanner()}
+          {/* {renderPreviewBanner()} */}
 
           <View style={{ paddingHorizontal: Spacing.lg }}>
             {/* Change Password */}
