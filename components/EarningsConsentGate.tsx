@@ -713,7 +713,7 @@ export function EarningsConsentGate({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[
                 styles.closeBtn,
                 {
@@ -734,7 +734,7 @@ export function EarningsConsentGate({
               >
                 ✕
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* ── Tab bar ──────────────────────────────────────────────── */}
