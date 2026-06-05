@@ -742,7 +742,7 @@ function BandwidthSharingSection({
       </View>
 
       {/* Preview mode info banner */}
-      {previewMode && !hasRealConsent && (
+      {/* {previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -767,10 +767,10 @@ function BandwidthSharingSection({
               : "💡 Tap the toggle to enable bandwidth sharing and start earning rewards."}
           </Text>
         </View>
-      )}
+      )} */}
 
       {/* Info text when enabled */}
-      {visualEnabled && !previewMode && (
+      {/* {visualEnabled && !previewMode && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -791,10 +791,10 @@ function BandwidthSharingSection({
             time.
           </Text>
         </View>
-      )}
+      )} */}
 
       {/* Info text when disabled (non-preview) */}
-      {!visualEnabled && !previewMode && !hasRealConsent && (
+      {/* {!visualEnabled && !previewMode && !hasRealConsent && (
         <View
           style={{
             marginTop: Spacing.md,
@@ -815,7 +815,7 @@ function BandwidthSharingSection({
             is protected.
           </Text>
         </View>
-      )}
+      )} */}
     </View>
   );
 }
