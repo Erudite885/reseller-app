@@ -40,6 +40,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > ./google-services.json
+            echo "✅ google-services.json created from secret"
+          else
+            echo "❌ GOOGLE_SERVICES_JSON secret not found"
+            exit 1
+          fi    
+
+      - name: Verify Firebase config exists
+        run: |
+          if [ -f "./google-services.json" ]; then
+            echo "✅ google-services.json found"
+          else
+            echo "❌ google-services.json not found"
+            exit 1
+          fi  
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -65,27 +86,6 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           API_SECRET: ${{ secrets.API_SECRET_KEY }}
           CONFIG_ID: ${{ github.event.inputs.config_id }}
-
-      - name: Setup Firebase config
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > ./google-services.json
-            echo "✅ google-services.json created from secret"
-          else
-            echo "❌ GOOGLE_SERVICES_JSON secret not found"
-            exit 1
-          fi    
-
-      - name: Verify Firebase config exists
-        run: |
-          if [ -f "./google-services.json" ]; then
-            echo "✅ google-services.json found"
-          else
-            echo "❌ google-services.json not found"
-            exit 1
-          fi
 
       # ✅ Fail fast before spending build minutes if any Xixapay secret is missing
       - name: Verify Xixapay secrets
