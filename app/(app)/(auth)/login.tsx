@@ -27,9 +27,9 @@ const ASSET_MAP: Record<string, any> = {
   "./assets/images/logo2.png": require("@/assets/images/logo2.png"),
   "./assets/images/adaptive-icon.png": require("@/assets/images/adaptive-icon.png"),
   "./assets/images/notification-icon.png": require("@/assets/images/icon.png"),
-  // "./assets/custom/icon.png": require("@/assets/custom/icon.png"),
-  // "./assets/custom/splash.png": require("@/assets/custom/splash.png"),
-  // "./assets/custom/adaptive-icon.png": require("@/assets/custom/adaptive-icon.png"),
+  "./assets/custom/icon.png": require("@/assets/custom/icon.png"),
+  "./assets/custom/splash.png": require("@/assets/custom/splash.png"),
+  "./assets/custom/adaptive-icon.png": require("@/assets/custom/adaptive-icon.png"),
 };
 
 // /**
@@ -61,40 +61,41 @@ const ASSET_MAP: Record<string, any> = {
 //  * 2. Reseller's configured logo path (from reseller-config.json)
 //  * 3. Default logo (assets/images/logo2.png)
 //  */
-// function getLogoSource() {
-//   try {
-//     // Priority 1: Custom reseller icon from build
-//     if (ASSET_MAP["./assets/custom/icon.png"]) {
-//       return ASSET_MAP["./assets/custom/icon.png"];
-//     }
+function getLogoSource() {
+  try {
+    // Priority 1: Custom reseller icon from build
+    if (ASSET_MAP["./assets/custom/icon.png"]) {
+      return ASSET_MAP["./assets/custom/icon.png"];
+    }
 
-//     // Priority 2: Configured logo path
-//     const configLogoPath = useResellerStore.getState().config.assets?.logo;
-//     if (configLogoPath && ASSET_MAP[configLogoPath]) {
-//       return ASSET_MAP[configLogoPath];
-//     }
-//   } catch {
-//     // Store not initialized yet, use fallback
-//   }
+    // Priority 2: Configured logo path
+    const configLogoPath = useResellerStore.getState().config.assets?.logo;
+    if (configLogoPath && ASSET_MAP[configLogoPath]) {
+      return ASSET_MAP[configLogoPath];
+    }
+  } catch {
+    // Store not initialized yet, use fallback
+  }
 
-//   // Priority 3: Default
-//   return require("@/assets/images/logo2.png");
-// }
+  // Priority 3: Default
+  return require("@/assets/images/logo2.png");
+}
 
 // /**
 //  * Resolves any asset path to its required source.
 //  * Can be reused by other screens (splash, etc.)
 //  */
-// export function getAssetSource(assetPath: string | undefined): any {
-//   if (!assetPath) return null;
+export function getAssetSource(assetPath: string | undefined): any {
+  if (!assetPath) return null;
 
-//   if (ASSET_MAP[assetPath]) {
-//     return ASSET_MAP[assetPath];
-//   }
+  if (ASSET_MAP[assetPath]) {
+    return ASSET_MAP[assetPath];
+  }
 
-//   // Fallback to icon
-//   return require("@/assets/images/icon.png");
-// }
+  // Fallback to icon
+  return require("@/assets/images/icon.png");
+}
+
 // ============================================
 // Helper function to call the edge function
 // ============================================
@@ -158,7 +159,7 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState({ email: "", password: "" });
 
   // Get the themed logo source
-  // const logoSrc = getLogoSource();
+  const logoSrc = getLogoSource();
 
   const handleLogin = async () => {
     // Validation
@@ -309,7 +310,7 @@ export default function LoginScreen() {
           >
             <Text style={{ fontSize: 48 }}>📱</Text>
           </View> */}
-          {/* <Image
+           <Image
             source={logoSrc}
             style={{
               width: 150,
@@ -317,7 +318,7 @@ export default function LoginScreen() {
               borderRadius: 70,
               marginBottom: 10,
             }}
-          /> */}
+          /> 
           <Text
             style={{
               fontSize: Typography.sizes.xxxl,
