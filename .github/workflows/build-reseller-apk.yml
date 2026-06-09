@@ -57,7 +57,7 @@ jobs:
         run: npm ci
 
       - name: Make scripts executable
-        run: chmod +x scripts/generate-reseller-assets.sh
+        run: chmod +x scripts/generate-reseller-assets.sh scripts/generate-google-services.sh
 
       - name: Generate reseller assets
         run: bash scripts/generate-reseller-assets.sh
@@ -66,67 +66,10 @@ jobs:
           API_SECRET: ${{ secrets.API_SECRET_KEY }}
           CONFIG_ID: ${{ github.event.inputs.config_id }}
 
-      # ── Patch google-services.json ─────────────────────────────────────────
-      # The GOOGLE_SERVICES_JSON secret holds the base config registered under
-      # com.edges. We clone that client entry and change only the package_name
-      # to match this reseller's APK. The mobilesdk_app_id and API key stay the
-      # same — Firebase FCM works at the project level, not per-package.
-      - name: Generate google-services.json for this reseller
+      - name: Generate google-services.json
+        run: bash scripts/generate-google-services.sh
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          # Read the package name from the generated reseller config
-          PACKAGE_NAME=$(python3 -c "
-          import json
-          with open('reseller-config.json') as f:
-              d = json.load(f)
-          pkg = d.get('config', {}).get('androidPackageName', '')
-          if not pkg:
-              raise ValueError('androidPackageName not found in reseller-config.json')
-          print(pkg)
-          ")
-
-          echo "📦 Target package: $PACKAGE_NAME"
-
-          # Write the base google-services.json from secret
-          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services-base.json
-
-          # Clone the first client entry, replace its package_name, write final file
-          python3 - "$PACKAGE_NAME" << 'PYEOF'
-          import json, sys
-
-          package_name = sys.argv[1]
-
-          with open('google-services-base.json') as f:
-              base = json.load(f)
-
-          # Take the first (and only) client entry as the template
-          template = base['client'][0]
-
-          # Deep-clone it and set the new package name
-          import copy
-          new_client = copy.deepcopy(template)
-          new_client['client_info']['android_client_info']['package_name'] = package_name
-
-          # Replace the client array with just this one entry
-          # (EAS/Firebase SDK only needs the entry matching the current package)
-          base['client'] = [new_client]
-
-          with open('google-services.json', 'w') as f:
-              json.dump(base, f, indent=2)
-
-          print(f"✅ google-services.json written for: {package_name}")
-          PYEOF
-
-          echo "📋 Verifying generated file:"
-          python3 -c "
-          import json
-          with open('google-services.json') as f:
-              d = json.load(f)
-          for c in d['client']:
-              print('  package:', c['client_info']['android_client_info']['package_name'])
-              print('  app_id :', c['client_info']['mobilesdk_app_id'])
-          "
 
       - name: Verify Xixapay secrets
         env:
@@ -209,7 +152,7 @@ jobs:
           echo "release_tag=${TAG}" >> $GITHUB_OUTPUT
           echo "✅ APK uploaded to: ${DOWNLOAD_URL}"
 
-      - name: Notify backend
+      - name: Notify backend of success
         if: success()
         run: |
           curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
