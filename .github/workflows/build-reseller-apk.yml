@@ -40,27 +40,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Firebase config
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > ./google-services.json
-            echo "✅ google-services.json created from secret"
-          else
-            echo "❌ GOOGLE_SERVICES_JSON secret not found"
-            exit 1
-          fi    
-
-      - name: Verify Firebase config exists
-        run: |
-          if [ -f "./google-services.json" ]; then
-            echo "✅ google-services.json found"
-          else
-            echo "❌ google-services.json not found"
-            exit 1
-          fi  
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -87,7 +66,68 @@ jobs:
           API_SECRET: ${{ secrets.API_SECRET_KEY }}
           CONFIG_ID: ${{ github.event.inputs.config_id }}
 
-      # ✅ Fail fast before spending build minutes if any Xixapay secret is missing
+      # ── Patch google-services.json ─────────────────────────────────────────
+      # The GOOGLE_SERVICES_JSON secret holds the base config registered under
+      # com.edges. We clone that client entry and change only the package_name
+      # to match this reseller's APK. The mobilesdk_app_id and API key stay the
+      # same — Firebase FCM works at the project level, not per-package.
+      - name: Generate google-services.json for this reseller
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          # Read the package name from the generated reseller config
+          PACKAGE_NAME=$(python3 -c "
+          import json
+          with open('reseller-config.json') as f:
+              d = json.load(f)
+          pkg = d.get('config', {}).get('androidPackageName', '')
+          if not pkg:
+              raise ValueError('androidPackageName not found in reseller-config.json')
+          print(pkg)
+          ")
+
+          echo "📦 Target package: $PACKAGE_NAME"
+
+          # Write the base google-services.json from secret
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services-base.json
+
+          # Clone the first client entry, replace its package_name, write final file
+          python3 - "$PACKAGE_NAME" << 'PYEOF'
+          import json, sys
+
+          package_name = sys.argv[1]
+
+          with open('google-services-base.json') as f:
+              base = json.load(f)
+
+          # Take the first (and only) client entry as the template
+          template = base['client'][0]
+
+          # Deep-clone it and set the new package name
+          import copy
+          new_client = copy.deepcopy(template)
+          new_client['client_info']['android_client_info']['package_name'] = package_name
+
+          # Replace the client array with just this one entry
+          # (EAS/Firebase SDK only needs the entry matching the current package)
+          base['client'] = [new_client]
+
+          with open('google-services.json', 'w') as f:
+              json.dump(base, f, indent=2)
+
+          print(f"✅ google-services.json written for: {package_name}")
+          PYEOF
+
+          echo "📋 Verifying generated file:"
+          python3 -c "
+          import json
+          with open('google-services.json') as f:
+              d = json.load(f)
+          for c in d['client']:
+              print('  package:', c['client_info']['android_client_info']['package_name'])
+              print('  app_id :', c['client_info']['mobilesdk_app_id'])
+          "
+
       - name: Verify Xixapay secrets
         env:
           EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
@@ -99,7 +139,6 @@ jobs:
           if [ -z "$EXPO_PUBLIC_XIXAPAY_BUSINESS_ID" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_BUSINESS_ID is empty"; exit 1; fi
           echo "All Xixapay secrets present ✓"
 
-      # ✅ Env vars passed directly to this step so eas build --local inherits them
       - name: Build Android APK
         run: |
           eas build \
@@ -116,24 +155,20 @@ jobs:
           EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
           EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}
 
-      # Determine release tag
       - name: Determine release tag
         id: release_tag
         run: |
           STORE_NAME="${{ github.event.inputs.store_name }}"
           CONFIG_ID="${{ github.event.inputs.config_id }}"
           TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-
           if [ -n "${{ github.event.inputs.version }}" ]; then
             TAG="${{ github.event.inputs.version }}"
           else
             TAG="${STORE_NAME}-${CONFIG_ID}-${TIMESTAMP}"
           fi
-
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Release tag: ${TAG}"
 
-      # Create release and upload APK using gh CLI
       - name: Create Release and Upload APK
         id: upload_release
         env:
@@ -146,13 +181,11 @@ jobs:
           TAG="${{ steps.release_tag.outputs.tag }}"
           APK_PATH="./${STORE_NAME}.apk"
 
-          # Verify APK exists
           if [ ! -f "$APK_PATH" ]; then
             echo "ERROR: APK file not found at $APK_PATH"
             exit 1
           fi
 
-          # Create release notes
           RELEASE_NOTES="## Reseller APK Build
 
           ### Build Information
@@ -165,29 +198,20 @@ jobs:
           ### Download
           The APK file is attached below."
 
-          # Create release and upload APK to tenant-distribution repo
-          echo "Creating release ${TAG} in Erudite885/tenant-distribution..."
-
           gh release create "$TAG" \
             --repo "Erudite885/tenant-distribution" \
             --title "${STORE_NAME} - Build ${CONFIG_ID}" \
             --notes "${RELEASE_NOTES}" \
             "$APK_PATH"
 
-          # Construct download URL
           DOWNLOAD_URL="https://github.com/Erudite885/tenant-distribution/releases/download/${TAG}/${STORE_NAME}.apk"
           echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
           echo "release_tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "✅ APK uploaded successfully to: ${DOWNLOAD_URL}"
+          echo "✅ APK uploaded to: ${DOWNLOAD_URL}"
 
-      # Notify backend with APK URL (this will update your database via your webhook)
       - name: Notify backend
         if: success()
         run: |
-          DOWNLOAD_URL="${{ steps.upload_release.outputs.download_url }}"
-
-          echo "Notifying backend with APK URL: ${DOWNLOAD_URL}"
-
           curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
@@ -195,17 +219,12 @@ jobs:
               \"configId\": \"${{ github.event.inputs.config_id }}\",
               \"resellerId\": \"${{ github.event.inputs.reseller_id }}\",
               \"status\": \"completed\",
-              \"apkUrl\": \"${DOWNLOAD_URL}\"
+              \"apkUrl\": \"${{ steps.upload_release.outputs.download_url }}\"
             }"
 
-          echo "✅ Backend notified and database updated via webhook"
-
-      # Notify backend of failure (optional but recommended)
       - name: Notify backend of failure
         if: failure()
         run: |
-          echo "Notifying backend of build failure..."
-
           curl -X POST "${{ secrets.API_URL }}/api/build-webhook" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
@@ -215,16 +234,14 @@ jobs:
               \"status\": \"failed\"
             }" || true
 
-      # Output summary
       - name: Build Summary
         if: success()
         run: |
           echo "========================================="
           echo "✅ BUILD COMPLETED SUCCESSFULLY"
-          echo "========================================="
-          echo "Store Name: ${{ github.event.inputs.store_name }}"
-          echo "Config ID: ${{ github.event.inputs.config_id }}"
-          echo "Reseller ID: ${{ github.event.inputs.reseller_id }}"
-          echo "Release Tag: ${{ steps.upload_release.outputs.release_tag }}"
+          echo "Store Name  : ${{ github.event.inputs.store_name }}"
+          echo "Config ID   : ${{ github.event.inputs.config_id }}"
+          echo "Reseller ID : ${{ github.event.inputs.reseller_id }}"
+          echo "Release Tag : ${{ steps.upload_release.outputs.release_tag }}"
           echo "Download URL: ${{ steps.upload_release.outputs.download_url }}"
           echo "========================================="
