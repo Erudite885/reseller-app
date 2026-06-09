@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pawns_service_title">Unlimited Data</string>
+    <string name="pawns_service_title">GET UNLIMITED DATA</string>
     <string name="pawns_service_body">App is running</string>
     <string name="pawns_channel_name">Bandwidth Sharing</string>
 </resources>
