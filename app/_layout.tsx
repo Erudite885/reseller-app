@@ -39,6 +39,66 @@ Notifications.setNotificationHandler({
 // ============================================
 // Push Notification Registration
 // ============================================
+// async function registerForPushNotificationsAsync() {
+//   try {
+//     console.log("📱 Starting push notification registration...");
+
+//     if (Platform.OS === "android") {
+//       await Notifications.setNotificationChannelAsync("default", {
+//         name: "default",
+//         importance: Notifications.AndroidImportance.MAX,
+//         vibrationPattern: [0, 250, 250, 250],
+//         lightColor: (() => {
+//           try {
+//             const primaryColor =
+//               useResellerStore.getState().config.theme?.primary || "#379114";
+//             return primaryColor + "7c";
+//           } catch {
+//             return "#3791147c";
+//           }
+//         })(),
+//       });
+//       console.log("✅ Android notification channel created");
+//     }
+
+//     if (!Device.isDevice) {
+//       console.log("⚠️ Physical device required for push notifications");
+//       return null;
+//     }
+
+//     const { status: existingStatus } =
+//       await Notifications.getPermissionsAsync();
+//     let finalStatus = existingStatus;
+
+//     if (existingStatus !== "granted") {
+//       const { status } = await Notifications.requestPermissionsAsync();
+//       finalStatus = status;
+//     }
+
+//     if (finalStatus !== "granted") {
+//       console.log("❌ Notification permission denied");
+//       return null;
+//     }
+
+//     console.log("✅ Notification permission granted");
+
+//     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
+
+//     const { data: token } = await Notifications.getExpoPushTokenAsync({
+//       projectId: projectId,
+//     });
+
+//     console.log("✅ Expo push token obtained successfully");
+//     return token;
+//   } catch (error: any) {
+//     console.log(
+//       "⚠️ Push notification error (safe to ignore):",
+//       error?.message || "Unknown error",
+//     );
+//     return null;
+//   }
+// }
+
 async function registerForPushNotificationsAsync() {
   try {
     console.log("📱 Starting push notification registration...");
@@ -80,19 +140,44 @@ async function registerForPushNotificationsAsync() {
       return null;
     }
 
-    console.log("✅ Notification permission granted");
+    const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
 
-    const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
+    const expoToken = (
+      await Notifications.getExpoPushTokenAsync({ projectId: projectId! })
+    ).data;
+    console.log("✅ Expo push token obtained");
 
-    const { data: token } = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId,
-    });
+    let fcmToken: string | null = null;
+    try {
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      fcmToken = deviceToken.data;
+      console.log(
+        "✅ Raw FCM token obtained:",
+        fcmToken?.substring(0, 30) + "...",
+      );
+      await supabase.from("debug_logs").insert({
+        context: "fcm_token_success",
+        payload: {
+          tokenPrefix: fcmToken?.substring(0, 30),
+          package: Platform.OS,
+        },
+      });
+    } catch (err: any) {
+      console.log("⚠️ getDevicePushTokenAsync failed:", err?.message || err);
+       await supabase.from("debug_logs").insert({
+         context: "fcm_token_failure",
+         payload: {
+           message: err?.message || String(err),
+           code: err?.code || null,
+           stack: err?.stack?.substring(0, 500) || null,
+         },
+       });
+    }
 
-    console.log("✅ Expo push token obtained successfully");
-    return token;
+    return { expoToken, fcmToken };
   } catch (error: any) {
     console.log(
-      "⚠️ Push notification error (safe to ignore):",
+      "⚠️ Push notification error:",
       error?.message || "Unknown error",
     );
     return null;
@@ -108,13 +193,13 @@ async function hasExistingPushToken(userId: string): Promise<boolean> {
 
     const { data: reseller } = await supabase
       .from("resellers")
-      .select("push_token, notifications_enabled")
+      .select("push_token, fcm_token, notifications_enabled")
       .eq("auth_user_id", userId)
       .maybeSingle();
 
     if (reseller) {
       const hasToken = !!(
-        reseller.push_token && reseller.notifications_enabled
+        reseller.push_token && reseller.fcm_token && reseller.notifications_enabled
       );
       console.log(`🔍 Reseller push token exists: ${hasToken}`);
       return hasToken;
@@ -130,14 +215,16 @@ async function hasExistingPushToken(userId: string): Promise<boolean> {
     if (resellerStore) {
       const { data: customer } = await supabase
         .from("reseller_customers")
-        .select("push_token, notifications_enabled")
+        .select("push_token, fcm_token, notifications_enabled")
         .eq("auth_user_id", userId)
         .eq("reseller_id", resellerStore.id)
         .maybeSingle();
 
       if (customer) {
         const hasToken = !!(
-          customer.push_token && customer.notifications_enabled
+          customer.push_token &&
+          customer.fcm_token &&
+          customer.notifications_enabled
         );
         console.log(`🔍 Customer push token exists: ${hasToken}`);
         return hasToken;
@@ -155,7 +242,10 @@ async function hasExistingPushToken(userId: string): Promise<boolean> {
 // ============================================
 // Save Push Token to Database
 // ============================================
-async function savePushTokenToDatabase(token: string, userId: string) {
+async function savePushTokenToDatabase(
+  tokens: { expoToken: string; fcmToken: string | null },
+  userId: string,
+) {
   try {
     const storeSlug = useResellerStore.getState().config.storeName;
     console.log("💾 Saving push token to database for user:", userId);
@@ -170,7 +260,8 @@ async function savePushTokenToDatabase(token: string, userId: string) {
       const { error } = await supabase
         .from("resellers")
         .update({
-          push_token: token,
+          push_token: tokens.expoToken,
+          fcm_token: tokens.fcmToken,
           notifications_enabled: true,
           updated_at: new Date().toISOString(),
         })
@@ -201,7 +292,8 @@ async function savePushTokenToDatabase(token: string, userId: string) {
         const { error } = await supabase
           .from("reseller_customers")
           .update({
-            push_token: token,
+            push_token: tokens.expoToken,
+            fcm_token: tokens.fcmToken,
             notifications_enabled: true,
           })
           .eq("id", customer.id);
@@ -357,9 +449,9 @@ function AppContent() {
 
           if (!hasToken) {
             console.log("📱 No existing push token, registering...");
-            const token = await registerForPushNotificationsAsync();
-            if (token) {
-              await savePushTokenToDatabase(token, session.user.id);
+            const tokens = await registerForPushNotificationsAsync();
+            if (tokens) {
+              await savePushTokenToDatabase(tokens, session.user.id);
             }
           } else {
             console.log("✅ Push token already exists - skipping registration");
@@ -396,9 +488,9 @@ function AppContent() {
 
         if (!hasToken) {
           console.log("📱 No existing push token on sign in, registering...");
-          const token = await registerForPushNotificationsAsync();
-          if (token) {
-            await savePushTokenToDatabase(token, session.user.id);
+          const tokens = await registerForPushNotificationsAsync();
+          if (tokens) {
+            await savePushTokenToDatabase(tokens, session.user.id);
           }
         } else {
           console.log("✅ Push token already exists - skipping registration");
