@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "355929055750",
-    "project_id": "alheri-data",
-    "storage_bucket": "alheri-data.firebasestorage.app"
+    "project_number": "468186640919",
+    "project_id": "edges-multi-tenant",
+    "storage_bucket": "edges-multi-tenant.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:355929055750:android:58ef2ab5407ca721699987",
+        "mobilesdk_app_id": "1:468186640919:android:2ae9342ff352b39f3ca252",
         "android_client_info": {
-          "package_name": "com.alheridata.app"
+          "package_name": "com.edges"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyByhQGSjRRn4htGu76FcG-TiNQRVk1_IGQ"
+          "current_key": "AIzaSyCP3bnAC-Ry0Jlf7KeiGLfPNlnlkWwqlg4"
         }
       ],
       "services": {

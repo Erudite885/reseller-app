@@ -61,6 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     jsEngine: "hermes",
     package: RESELLER_CONFIG.config?.androidPackageName,
+    googleServicesFile: "./google-services.json",
     edgeToEdgeEnabled: true,
   },
 
