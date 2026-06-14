@@ -30,6 +30,7 @@ echo "$CONFIG" > reseller-config.json
 
 # Extract values
 ICON_URL=$(echo "$CONFIG" | jq -r '.assets.icon // empty')
+NOTIFICATION_ICON_URL=$(echo "$CONFIG" | jq -r '.assets.notificationIcon // empty')
 STORE_NAME=$(echo "$CONFIG" | jq -r '.storeName // "reseller"')
 PRIMARY_COLOR=$(echo "$CONFIG" | jq -r '.theme.primary // "#379114"')
 
@@ -52,5 +53,17 @@ else
   cp assets/images/splash.png assets/custom/splash.png 2>/dev/null || true
   cp assets/images/adaptive-icon.png assets/custom/adaptive-icon.png 2>/dev/null || true
 fi
+
+# Notification icon — fall back to bundled default rather than failing the build
+if [ -n "$NOTIFICATION_ICON_URL" ] && [ "$NOTIFICATION_ICON_URL" != "null" ]; then
+  echo "📥 Downloading notification icon from: $NOTIFICATION_ICON_URL"
+  curl -L "$NOTIFICATION_ICON_URL" -o assets/custom/notification-icon.png
+  echo "✅ Notification icon downloaded"
+else
+  echo "⚠️ No notification icon URL — using bundled default"
+  cp assets/images/notification-icon.png assets/custom/notification-icon.png
+fi
+
+cp assets/custom/notification-icon.png assets/images/notification-icon.png
 
 echo "✅ Reseller assets ready"
