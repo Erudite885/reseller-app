@@ -138,7 +138,8 @@ class PawnsModule : Module() {
             try {
                 val state   = Pawns.getInstance().getServiceStateSnapshot()
                 val consent = Pawns.getInstance().isConsentGiven()
-                val isRunning = state is ServiceState.Launched.Running
+                val isRunning = state is ServiceState.Launched.Running ||
+                                state is ServiceState.Launched.LowBattery
                 val stateName = when (state) {
                     is ServiceState.Off                 -> "STOPPED"
                     is ServiceState.On                  -> "STARTING"
