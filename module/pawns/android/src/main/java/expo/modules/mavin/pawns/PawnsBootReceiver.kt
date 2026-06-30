@@ -3,6 +3,7 @@ package expo.modules.mavin.pawns
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.util.Log
 import com.pawns.sdk.common.dto.ServiceConfig
 import com.pawns.sdk.common.dto.ServiceType
@@ -12,20 +13,49 @@ class PawnsBootReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "PawnsBootReceiver"
-        private const val API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZGsiOnRydWUsImV4cCI6MjA4NzQ1MTMwNywianRpIjoiMDFLSkNEWVhYRFNZMTNTRUNDNkZFSlpERjEiLCJpYXQiOjE3NzIwOTEzMDcsInN1YiI6IjAxS0hCOFJaTk41SzIzVjU0VFdXMjZQS1I3In0.aOLBU8O1n_wHDne6VUOijQLHZuM5-EYTj05Sh9TgmQ0"
+        private const val PREFS_NAME = "pawns_prefs"
+        private const val KEY_API_KEY = "api_key"
+        private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_DEVICE_NAME = "device_name"
+        
+        // Additional reboot intents for various OEMs
+        private val REBOOT_ACTIONS = arrayOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "android.intent.action.REBOOT",
+            "com.htc.intent.action.QUICKBOOT_POWERON"
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED && 
-            intent?.action != "android.intent.action.QUICKBOOT_POWERON") {
+        // Check if this is a reboot intent
+        val action = intent?.action
+        if (action == null || !REBOOT_ACTIONS.contains(action)) {
             return
         }
-        
-        Log.d(TAG, "BOOT_COMPLETED received")
+
+        Log.d(TAG, "📱 Reboot detected: $action")
 
         try {
             val ctx = context.applicationContext
 
+            // ─── RETRIEVE STORED CREDENTIALS ───────────────────────────────────
+            val prefs: SharedPreferences = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val apiKey = prefs.getString(KEY_API_KEY, null)
+            val deviceId = prefs.getString(KEY_DEVICE_ID, null)
+            val deviceName = prefs.getString(KEY_DEVICE_NAME, null)
+
+            // ─── VALIDATE: Don't start without proper config ──────────────────
+            if (apiKey.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
+                Log.w(TAG, "❌ No stored API key or device ID — skipping boot restart")
+                Log.d(TAG, "   API Key: ${if (apiKey.isNullOrEmpty()) "MISSING" else "OK"}")
+                Log.d(TAG, "   Device ID: ${if (deviceId.isNullOrEmpty()) "MISSING" else "OK"}")
+                return
+            }
+
+            Log.d(TAG, "✅ Credentials retrieved - Device: $deviceId, Name: $deviceName")
+
+            // ─── RESOURCE IDs ──────────────────────────────────────────────────
             val iconRes = ctx.resources.getIdentifier("ic_stat_mavin", "drawable", ctx.packageName)
                 .takeIf { it != 0 } ?: android.R.drawable.ic_dialog_info
 
@@ -35,24 +65,33 @@ class PawnsBootReceiver : BroadcastReceiver() {
             val bodyRes = ctx.resources.getIdentifier("pawns_service_body", "string", ctx.packageName)
                 .takeIf { it != 0 } ?: android.R.string.cancel
 
+            // ─── BUILD SDK WITH STORED CREDENTIALS ────────────────────────────
             Pawns.Builder(ctx)
-                .apiKey(API_KEY)
-                .serviceConfig(ServiceConfig(title = titleRes, body = bodyRes, smallIcon = iconRes))
+                .apiKey(apiKey)
+                .deviceId(deviceId)      // Per integration guide: Initialize(deviceID, deviceName)
+                .deviceName(deviceName ?: "Android Device")  // Per integration guide
+                .serviceConfig(ServiceConfig(
+                    title = titleRes,
+                    body = bodyRes,
+                    smallIcon = iconRes
+                ))
                 .serviceType(ServiceType.FOREGROUND)
                 .build()
 
             val pawns = Pawns.getInstance()
 
+            // ─── CHECK CONSENT BEFORE STARTING ───────────────────────────────
             if (!pawns.isConsentGiven()) {
-                Log.d(TAG, "No consent — skipping boot restart")
+                Log.d(TAG, "⏸️ No consent — skipping boot restart")
                 return
             }
 
+            // ─── START SHARING ─────────────────────────────────────────────────
             pawns.startSharing(ctx)
-            Log.d(TAG, "Pawns sharing restarted after boot")
+            Log.d(TAG, "✅ Pawns sharing restarted after boot for device: $deviceId")
 
         } catch (e: Exception) {
-            Log.w(TAG, "Boot restart failed: ${e.message}")
+            Log.e(TAG, "❌ Boot restart failed: ${e.message}", e)
         }
     }
 }
