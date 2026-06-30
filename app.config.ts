@@ -72,7 +72,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-notifications",
       {
         icon:
-          RESELLER_CONFIG.assets?.icon ||
+          RESELLER_CONFIG.assets?.notificationIcon ||
           "./assets/images/notification-icon.png",
         color: RESELLER_CONFIG.theme?.primary || "#379114",
       },
