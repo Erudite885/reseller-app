@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
 import { useTheme } from "@/hooks/useTheme";
 import { useResellerStore } from "@/store/resellerStore";
 import { initialize, optIn, start } from "@/module/pawns";
@@ -23,6 +25,7 @@ import { initialize, optIn, start } from "@/module/pawns";
 
 export const CONSENT_STORAGE_KEY = "@app_pawns_consent_decision";
 export const CONSENT_SUPPRESS_KEY = "@app_pawns_suppress_modal";
+export const PAWNS_API_KEY_KEY = "@app_pawns_api_key";
 const CONSENT_DECISION_ACCEPTED = "accepted";
 
 // ─── External URLs (only for third-party SDK) ─────────────────────────────────
@@ -39,6 +42,14 @@ type Tab = (typeof TABS)[number];
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => {});
+}
+
+function getDeviceId(): string {
+  return Device.osBuildId || Constants.deviceId || "unknown-device";
+}
+
+function getDeviceName(): string {
+  return Device.deviceName || `${Device.brand || "Unknown"} ${Device.modelName || "Device"}`;
 }
 
 // ─── Checkbox ─────────────────────────────────────────────────────────────────
@@ -293,6 +304,8 @@ function DataProtectionTab({
   colors: any;
   storeName: string;
 }) {
+  const router = useRouter();
+  
   return (
     <ScrollView
       style={styles.tabContent}
@@ -361,7 +374,7 @@ function DataProtectionTab({
         <InternalLinkText
           route="/(app)/(legal)/privacy"
           colors={colors}
-          router={useRouter()}
+          router={router}
         >
           Privacy Policy
         </InternalLinkText>
@@ -381,7 +394,7 @@ function DataProtectionTab({
         <InternalLinkText
           route="/(app)/(legal)/privacy"
           colors={colors}
-          router={useRouter()}
+          router={router}
         >
           Privacy Policy
         </InternalLinkText>
@@ -507,7 +520,7 @@ export async function checkAndShowConsent(): Promise<boolean> {
 }
 
 export async function clearConsentDecision(): Promise<void> {
-  await AsyncStorage.multiRemove([CONSENT_STORAGE_KEY, CONSENT_SUPPRESS_KEY]);
+  await AsyncStorage.multiRemove([CONSENT_STORAGE_KEY, CONSENT_SUPPRESS_KEY, PAWNS_API_KEY_KEY]);
 }
 
 export async function revokeConsent(): Promise<void> {
@@ -534,20 +547,22 @@ export interface EarningsConsentGateProps {
   visible: boolean;
   onDismiss: () => void;
   onOpenSettings: () => void;
-  onConsentAccepted?: () => void; // Add this callback
+  onConsentAccepted?: () => void;
+  apiKey: string; // API key passed from app layer
 }
 
 export function EarningsConsentGate({
   visible,
   onDismiss,
   onOpenSettings,
-   onConsentAccepted, // ← Add this to the parameters
+  onConsentAccepted,
+  apiKey,
 }: EarningsConsentGateProps) {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const rawStoreName =
     useResellerStore.getState().config.storeName || "the App";
-  const storeName = capitalizeStoreName(rawStoreName); // ← Capitalize here
+  const storeName = capitalizeStoreName(rawStoreName);
 
   const [activeTab, setActiveTab] = useState<Tab>("General");
   const [consentGiven, setConsentGiven] = useState(false);
@@ -565,12 +580,20 @@ export function EarningsConsentGate({
     if (!isLoading) onDismiss();
   }, [isLoading, onDismiss]);
 
-  // In the main component, update the handleAccept:
   const handleAccept = useCallback(async () => {
     if (!consentGiven || isLoading) return;
     setIsLoading(true);
     try {
-      await initialize();
+      // Get device identifiers
+      const deviceID = getDeviceId();
+      const deviceName = getDeviceName();
+
+      // Store API key for boot receiver
+      await AsyncStorage.setItem(PAWNS_API_KEY_KEY, apiKey);
+
+      // Initialize SDK with API key and device identifiers
+      // Per integration guide: Initialize(deviceID, deviceName)
+      await initialize(apiKey, deviceID, deviceName);
       await optIn();
       await start();
       await AsyncStorage.setItem(
@@ -579,33 +602,14 @@ export function EarningsConsentGate({
       );
       onDismiss();
       if (onConsentAccepted) {
-        onConsentAccepted(); // Notify parent that consent was accepted
+        onConsentAccepted();
       }
     } catch (err) {
       console.error("[EarningsConsentGate] Accept failed:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [consentGiven, isLoading, onDismiss, onConsentAccepted]);
-
-  // const handleAccept = useCallback(async () => {
-  //   if (!consentGiven || isLoading) return;
-  //   setIsLoading(true);
-  //   try {
-  //     await initialize();
-  //     await optIn();
-  //     await start();
-  //     await AsyncStorage.setItem(
-  //       CONSENT_STORAGE_KEY,
-  //       CONSENT_DECISION_ACCEPTED,
-  //     );
-  //     onDismiss();
-  //   } catch (err) {
-  //     console.error("[EarningsConsentGate] Accept failed:", err);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // }, [consentGiven, isLoading, onDismiss]);
+  }, [consentGiven, isLoading, onDismiss, onConsentAccepted, apiKey]);
 
   const handleOpenSettings = useCallback(() => {
     if (isLoading) return;
@@ -713,28 +717,6 @@ export function EarningsConsentGate({
                 </Text>
               </View>
             </View>
-            {/* <TouchableOpacity
-              style={[
-                styles.closeBtn,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.06)",
-                },
-              ]}
-              onPress={handleDismiss}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              disabled={isLoading}
-              hitSlop={12}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[styles.closeBtnText, { color: colors.textSecondary }]}
-              >
-                ✕
-              </Text>
-            </TouchableOpacity> */}
           </View>
 
           {/* ── Tab bar ──────────────────────────────────────────────── */}
@@ -864,16 +846,14 @@ export function EarningsConsentGate({
   );
 }
 
-// Add a helper function to capitalize store name
+// Helper function to capitalize store name
 function capitalizeStoreName(name: string): string {
   if (!name) return "the App";
-  // Capitalize first letter of each word
   return name
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
-
 
 export default EarningsConsentGate;
 

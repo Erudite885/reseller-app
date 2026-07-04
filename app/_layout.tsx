@@ -11,10 +11,12 @@ import * as Device from "expo-device";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { useRouter, usePathname } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   EarningsConsentGate,
   checkAndShowConsent,
   isConsentAccepted,
+  PAWNS_API_KEY_KEY,
 } from "@/components/EarningsConsentGate";
 import { queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/hooks/useTheme";
@@ -36,69 +38,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// ─── PAWNS API KEY ──────────────────────────────────────────────────────────
+// Get API key from environment variables (EXPO_PUBLIC_ prefix required)
+const PAWNS_API_KEY = process.env.EXPO_PUBLIC_PAWNS_API_KEY || "";
+
 // ============================================
 // Push Notification Registration
 // ============================================
-// async function registerForPushNotificationsAsync() {
-//   try {
-//     console.log("📱 Starting push notification registration...");
-
-//     if (Platform.OS === "android") {
-//       await Notifications.setNotificationChannelAsync("default", {
-//         name: "default",
-//         importance: Notifications.AndroidImportance.MAX,
-//         vibrationPattern: [0, 250, 250, 250],
-//         lightColor: (() => {
-//           try {
-//             const primaryColor =
-//               useResellerStore.getState().config.theme?.primary || "#379114";
-//             return primaryColor + "7c";
-//           } catch {
-//             return "#3791147c";
-//           }
-//         })(),
-//       });
-//       console.log("✅ Android notification channel created");
-//     }
-
-//     if (!Device.isDevice) {
-//       console.log("⚠️ Physical device required for push notifications");
-//       return null;
-//     }
-
-//     const { status: existingStatus } =
-//       await Notifications.getPermissionsAsync();
-//     let finalStatus = existingStatus;
-
-//     if (existingStatus !== "granted") {
-//       const { status } = await Notifications.requestPermissionsAsync();
-//       finalStatus = status;
-//     }
-
-//     if (finalStatus !== "granted") {
-//       console.log("❌ Notification permission denied");
-//       return null;
-//     }
-
-//     console.log("✅ Notification permission granted");
-
-//     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
-
-//     const { data: token } = await Notifications.getExpoPushTokenAsync({
-//       projectId: projectId,
-//     });
-
-//     console.log("✅ Expo push token obtained successfully");
-//     return token;
-//   } catch (error: any) {
-//     console.log(
-//       "⚠️ Push notification error (safe to ignore):",
-//       error?.message || "Unknown error",
-//     );
-//     return null;
-//   }
-// }
-
 async function registerForPushNotificationsAsync() {
   try {
     console.log("📱 Starting push notification registration...");
@@ -164,14 +110,14 @@ async function registerForPushNotificationsAsync() {
       });
     } catch (err: any) {
       console.log("⚠️ getDevicePushTokenAsync failed:", err?.message || err);
-       await supabase.from("debug_logs").insert({
-         context: "fcm_token_failure",
-         payload: {
-           message: err?.message || String(err),
-           code: err?.code || null,
-           stack: err?.stack?.substring(0, 500) || null,
-         },
-       });
+      await supabase.from("debug_logs").insert({
+        context: "fcm_token_failure",
+        payload: {
+          message: err?.message || String(err),
+          code: err?.code || null,
+          stack: err?.stack?.substring(0, 500) || null,
+        },
+      });
     }
 
     return { expoToken, fcmToken };
@@ -421,6 +367,24 @@ function AppContent() {
   const [isNavigatingToSettings, setIsNavigatingToSettings] = useState(false);
   const [previousPathname, setPreviousPathname] = useState<string>("");
 
+  // ─── Store API Key on App Start ────────────────────────────────────────
+  useEffect(() => {
+    const storeApiKey = async () => {
+      if (PAWNS_API_KEY) {
+        try {
+          await AsyncStorage.setItem(PAWNS_API_KEY_KEY, PAWNS_API_KEY);
+          console.log("[RootLayout] Pawns API key stored for boot receiver");
+        } catch (err) {
+          console.error("[RootLayout] Failed to store API key:", err);
+        }
+      } else {
+        console.warn("[RootLayout] No Pawns API key found in environment");
+      }
+    };
+
+    storeApiKey();
+  }, []);
+
   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
   useEffect(() => {
     let mounted = true;
@@ -528,8 +492,11 @@ function AppContent() {
         shouldShow,
       );
 
-      if (shouldShow && !accepted) {
+      // Only show if consent is needed AND we have an API key
+      if (shouldShow && !accepted && PAWNS_API_KEY) {
         setShowConsentGate(true);
+      } else if (!PAWNS_API_KEY) {
+        console.warn("[ConsentGate] Consent skipped: No API key available");
       }
     } catch (error) {
       console.error("[ConsentGate] Error checking consent:", error);
@@ -668,6 +635,7 @@ function AppContent() {
         onDismiss={handleDismiss}
         onOpenSettings={handleOpenSettingsFromConsent}
         onConsentAccepted={handleConsentAccepted}
+        apiKey={PAWNS_API_KEY}
       />
     </>
   );
