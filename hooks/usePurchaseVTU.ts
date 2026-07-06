@@ -26,7 +26,7 @@ export function usePurchaseData() {
       if (!session?.access_token) throw new Error("No session");
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/purchase-data`,
+        `${process.env.EXPO_PUBLIC_BIMBO_SUPABASE_URL}/functions/v1/purchase-data`,
         {
           method: "POST",
           headers: {
@@ -77,7 +77,7 @@ export function usePurchaseAirtime() {
       if (!session?.access_token) throw new Error("No session");
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/purchase-airtime`,
+        `${process.env.EXPO_PUBLIC_BIMBO_SUPABASE_URL}/functions/v1/purchase-airtime`,
         {
           method: "POST",
           headers: {
