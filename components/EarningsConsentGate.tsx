@@ -588,25 +588,6 @@ export function EarningsConsentGate({
     }
   }, [consentGiven, isLoading, onDismiss, onConsentAccepted]);
 
-  // const handleAccept = useCallback(async () => {
-  //   if (!consentGiven || isLoading) return;
-  //   setIsLoading(true);
-  //   try {
-  //     await initialize();
-  //     await optIn();
-  //     await start();
-  //     await AsyncStorage.setItem(
-  //       CONSENT_STORAGE_KEY,
-  //       CONSENT_DECISION_ACCEPTED,
-  //     );
-  //     onDismiss();
-  //   } catch (err) {
-  //     console.error("[EarningsConsentGate] Accept failed:", err);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // }, [consentGiven, isLoading, onDismiss]);
-
   const handleOpenSettings = useCallback(() => {
     if (isLoading) return;
     onDismiss();
@@ -713,28 +694,6 @@ export function EarningsConsentGate({
                 </Text>
               </View>
             </View>
-            {/* <TouchableOpacity
-              style={[
-                styles.closeBtn,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.06)",
-                },
-              ]}
-              onPress={handleDismiss}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              disabled={isLoading}
-              hitSlop={12}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[styles.closeBtnText, { color: colors.textSecondary }]}
-              >
-                ✕
-              </Text>
-            </TouchableOpacity> */}
           </View>
 
           {/* ── Tab bar ──────────────────────────────────────────────── */}
