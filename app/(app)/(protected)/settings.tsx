@@ -57,10 +57,6 @@ export default function SettingsScreen() {
   // ✅ ADD THIS HOOK
   const { validatePin } = useTransactionPin();
 
-  // User preferences state
-  // const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  // const [checkingNotifications, setCheckingNotifications] = useState(false);
-
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Add this state at the top of your SettingsScreen component:
@@ -83,15 +79,6 @@ export default function SettingsScreen() {
     }
     return "Now";
   };
-
-  // useEffect(() => {
-  //   // Check notification status on mount
-  //   async function loadNotificationStatus() {
-  //     const enabled = await checkNotificationStatus();
-  //     setNotificationsEnabled(enabled);
-  //   }
-  //   loadNotificationStatus();
-  // }, []);
 
   const handleNotificationToggle = async (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
