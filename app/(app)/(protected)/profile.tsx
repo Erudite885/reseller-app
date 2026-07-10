@@ -45,14 +45,6 @@ export default function EditProfileScreen() {
     }
   }, [profile]);
 
-  // Track if anything has changed
-  // useEffect(() => {
-  //   const hasChanged =
-  //     username !== (profile?.username || "") ||
-
-  //   setHasChanges(hasChanged);
-  // }, [username, profile]);
-
   // Only track username change
   useEffect(() => {
     const hasChanged = username !== (profile?.username || "");
