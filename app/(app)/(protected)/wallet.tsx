@@ -7,7 +7,6 @@ import {
   useCreateVirtualAccount,
   useVirtualAccounts,
 } from "@/hooks/useVirtualAccounts";
-// import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -46,12 +45,7 @@ export default function WalletScreen() {
     email: profile?.email || "",
     name: profile?.username || "",
     phoneNumber: "",
-    // bvn: "",
-    // nin: "",
   });
-
-  // Track which ID type user chose
-  // const [idType, setIdType] = useState<"bvn" | "nin" | null>(null);
 
   // Has virtual account
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
@@ -130,16 +124,6 @@ export default function WalletScreen() {
     }
   };
 
-  // const handleCopyToClipboard = async (text: string, label: string) => {
-  //   try {
-  //     await Clipboard.setStringAsync(text);
-  //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  //     displayToast(`${label} copied to clipboard!`);
-  //   } catch (error) {
-  //     displayToast("Failed to copy");
-  //   }
-  // };
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -147,40 +131,6 @@ export default function WalletScreen() {
     >
       <SafeAreaView style={{ flex: 1 }}>
         {/* Header */}
-        {/* <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: Spacing.lg,
-            paddingVertical: Spacing.md,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          }}
-        >
-          <Pressable onPress={() => router.back()}>
-            <Text
-              style={{
-                fontSize: Typography.sizes.base,
-                color: colors.primary,
-                fontWeight: Typography.weights.semibold,
-              }}
-            >
-              Back
-            </Text>
-          </Pressable>
-          <Text
-            style={{
-              fontSize: Typography.sizes.lg,
-              fontWeight: Typography.weights.bold,
-              color: colors.text,
-            }}
-          >
-            Wallet Settings
-          </Text>
-          <View style={{ width: 40 }} />
-        </View> */}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
@@ -281,12 +231,6 @@ export default function WalletScreen() {
                       Account Number
                     </Text>
                     <Pressable
-                      // onPress={() =>
-                      //   handleCopyToClipboard(
-                      //     account.account_number,
-                      //     "Account number",
-                      //   )
-                      // }
                       style={{
                         flexDirection: "row",
                         justifyContent: "space-between",
@@ -328,12 +272,6 @@ export default function WalletScreen() {
                       Account Name
                     </Text>
                     <Pressable
-                      // onPress={() =>
-                      //   handleCopyToClipboard(
-                      //     account.account_name,
-                      //     "Account name",
-                      //   )
-                      // }
                       style={{
                         flexDirection: "row",
                         justifyContent: "space-between",
@@ -360,41 +298,6 @@ export default function WalletScreen() {
                       </Text>
                     </Pressable>
                   </View>
-
-                  {/* Account Type */}
-                  {/* <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      paddingVertical: Spacing.md,
-                      paddingHorizontal: Spacing.md,
-                      backgroundColor: colors.primary + "10",
-                      borderRadius: Radius.md,
-                      borderWidth: 1,
-                      borderColor: colors.primary + "40",
-                      marginBottom: Spacing.lg,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.sm,
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      Account Type
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.sm,
-                        fontWeight: Typography.weights.semibold,
-                        color: colors.primary,
-                      }}
-                    >
-                      {account.account_type === "static"
-                        ? "Static Account"
-                        : "Dynamic Account"}
-                    </Text>
-                  </View> */}
 
                   {/* Info Box */}
                   <View
@@ -506,100 +409,6 @@ export default function WalletScreen() {
                   maxLength={11}
                   leftIcon={<Text>📱</Text>}
                 />
-
-                {/* BVN Section */}
-                {/* <Card
-                  variant="outlined"
-                  padding="md"
-                  style={{
-                    backgroundColor: colors.primary + "05",
-                    borderColor: colors.primary + "40",
-                  }}
-                >
-                  <View style={{ gap: Spacing.md }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "flex-start",
-                        gap: Spacing.sm,
-                      }}
-                    >
-                      <Text style={{ fontSize: 16 }}>ℹ️</Text>
-                      <Text
-                        style={{
-                          fontSize: Typography.sizes.xs,
-                          color: colors.textSecondary,
-                          flex: 1,
-                          lineHeight: 18,
-                        }}
-                      >
-                        You need to provide your{" "}
-                        <Text style={{ fontWeight: Typography.weights.bold }}>
-                          BVN{" "}
-                        </Text>
-                        to create a virtual account.
-                      </Text>
-                    </View>
-
-                    {/* BVN Input *
-                    {/* <Input
-                      label="BVN"
-                      placeholder="11 digits"
-                      value={formData.bvn}
-                      onChangeText={(text) => handleFormChange("bvn", text)}
-                      editable={!isProcessing && idType !== "nin"}
-                      keyboardType="numeric"
-                      maxLength={11}
-                      leftIcon={<Text>🆔</Text>}
-                      containerStyle={{
-                        opacity: idType === "nin" ? 0.5 : 1,
-                      }}
-                    /> *
-
-                    {/* NIN Input *
-                    {/* <Input
-                      label="NIN"
-                      placeholder="11 digits"
-                      value={formData.nin}
-                      onChangeText={(text) => handleFormChange("nin", text)}
-                      editable={!isProcessing && idType !== "bvn"}
-                      keyboardType="numeric"
-                      maxLength={11}
-                      leftIcon={<Text>🆔</Text>}
-                      containerStyle={{
-                        opacity: idType === "bvn" ? 0.5 : 1,
-                      }}
-                    /> */}
-
-                {/* Selected ID Type */}
-                {/* {idType && (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: Spacing.sm,
-                          backgroundColor: colors.success + "10",
-                          paddingHorizontal: Spacing.md,
-                          paddingVertical: Spacing.sm,
-                          borderRadius: Radius.md,
-                          borderWidth: 1,
-                          borderColor: colors.success + "40",
-                        }}
-                      >
-                        <Text style={{ fontSize: 14 }}>✓</Text>
-                        <Text
-                          style={{
-                            fontSize: Typography.sizes.sm,
-                            color: colors.success,
-                            fontWeight: Typography.weights.semibold,
-                          }}
-                        >
-                          Using {idType.toUpperCase()}
-                        </Text>
-                      </View>
-                    )} *
-                  </View>
-                </Card> */}
 
                 {/* Security Info */}
                 <Card
