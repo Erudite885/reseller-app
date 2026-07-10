@@ -36,69 +36,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ============================================
-// Push Notification Registration
-// ============================================
-// async function registerForPushNotificationsAsync() {
-//   try {
-//     console.log("📱 Starting push notification registration...");
-
-//     if (Platform.OS === "android") {
-//       await Notifications.setNotificationChannelAsync("default", {
-//         name: "default",
-//         importance: Notifications.AndroidImportance.MAX,
-//         vibrationPattern: [0, 250, 250, 250],
-//         lightColor: (() => {
-//           try {
-//             const primaryColor =
-//               useResellerStore.getState().config.theme?.primary || "#379114";
-//             return primaryColor + "7c";
-//           } catch {
-//             return "#3791147c";
-//           }
-//         })(),
-//       });
-//       console.log("✅ Android notification channel created");
-//     }
-
-//     if (!Device.isDevice) {
-//       console.log("⚠️ Physical device required for push notifications");
-//       return null;
-//     }
-
-//     const { status: existingStatus } =
-//       await Notifications.getPermissionsAsync();
-//     let finalStatus = existingStatus;
-
-//     if (existingStatus !== "granted") {
-//       const { status } = await Notifications.requestPermissionsAsync();
-//       finalStatus = status;
-//     }
-
-//     if (finalStatus !== "granted") {
-//       console.log("❌ Notification permission denied");
-//       return null;
-//     }
-
-//     console.log("✅ Notification permission granted");
-
-//     const projectId = "bde21e0b-dd38-48b3-a695-ec1b381c3890";
-
-//     const { data: token } = await Notifications.getExpoPushTokenAsync({
-//       projectId: projectId,
-//     });
-
-//     console.log("✅ Expo push token obtained successfully");
-//     return token;
-//   } catch (error: any) {
-//     console.log(
-//       "⚠️ Push notification error (safe to ignore):",
-//       error?.message || "Unknown error",
-//     );
-//     return null;
-//   }
-// }
-
 async function registerForPushNotificationsAsync() {
   try {
     console.log("📱 Starting push notification registration...");
