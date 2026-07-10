@@ -59,17 +59,6 @@ export default function ContactScreen() {
   }, []);
 
   const contactMethods: ContactMethod[] = [
-    // {
-    //   id: "whatsapp",
-    //   icon: "💬",
-    //   label: "WhatsApp",
-    //   value: "+234 705 751 7841",
-    //   description: "Chat with us anytime",
-    //   action: () => {
-    //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    //     Linking.openURL("https://wa.me/2347057517841");
-    //   },
-    // },
     ...(resellerEmail
       ? [
           {
