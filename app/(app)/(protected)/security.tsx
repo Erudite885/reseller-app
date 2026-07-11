@@ -381,82 +381,6 @@ function BandwidthSharingSection({
           disabled={isToggling || isAccepting}
         />
       </View>
-
-      {/* Preview mode info banner */}
-      {/* {previewMode && !hasRealConsent && (
-        <View
-          style={{
-            marginTop: Spacing.md,
-            paddingTop: Spacing.sm,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            backgroundColor: colors.primary + "10",
-            borderRadius: Radius.sm,
-            padding: Spacing.sm,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: Typography.sizes.xs,
-              color: colors.textSecondary,
-              lineHeight: 18,
-              textAlign: "center",
-            }}
-          >
-            {!hasAttemptedFirstToggle
-              ? "💡 This is a preview — the toggle is ON but nothing is enabled yet. Tap it to turn it off, then tap again to actually enable bandwidth sharing."
-              : "💡 Tap the toggle to enable bandwidth sharing and start earning rewards."}
-          </Text>
-        </View>
-      )} */}
-
-      {/* Info text when enabled */}
-      {/* {visualEnabled && !previewMode && (
-        <View
-          style={{
-            marginTop: Spacing.md,
-            paddingTop: Spacing.sm,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: Typography.sizes.xs,
-              color: colors.textSecondary,
-              lineHeight: 18,
-            }}
-          >
-            💡 Your device is currently sharing idle bandwidth. This uses
-            minimal resources and you earn rewards. You can disable this at any
-            time.
-          </Text>
-        </View>
-      )} */}
-
-      {/* Info text when disabled (non-preview) */}
-      {/* {!visualEnabled && !previewMode && !hasRealConsent && (
-        <View
-          style={{
-            marginTop: Spacing.md,
-            paddingTop: Spacing.sm,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: Typography.sizes.xs,
-              color: colors.textSecondary,
-              lineHeight: 18,
-            }}
-          >
-            💡 Enable bandwidth sharing to earn rewards by sharing your idle
-            internet connection. Your data is always encrypted and your privacy
-            is protected.
-          </Text>
-        </View>
-      )} */}
     </View>
   );
 }
@@ -739,36 +663,6 @@ export default function SecurityScreen() {
     // Navigate back to home/index page after successful enable
     router.replace("/(app)/(protected)");
   };
-
-  // Show preview banner at top of security page when in preview mode
-  // const renderPreviewBanner = () => {
-  //   if (!previewMode) return null;
-
-  //   return (
-  //     <View
-  //       style={{
-  //         backgroundColor: colors.primary + "15",
-  //         paddingHorizontal: Spacing.lg,
-  //         paddingVertical: Spacing.md,
-  //         marginBottom: Spacing.md,
-  //         borderBottomWidth: 1,
-  //         borderBottomColor: colors.primary + "30",
-  //       }}
-  //     >
-  //       <Text
-  //         style={{
-  //           fontSize: Typography.sizes.sm,
-  //           color: colors.text,
-  //           textAlign: "center",
-  //           fontWeight: Typography.weights.medium,
-  //         }}
-  //       >
-  //         👋 Welcome! Toggle the switch below to review and accept the bandwidth
-  //         sharing terms.
-  //       </Text>
-  //     </View>
-  //   );
-  // };
 
   // Main Security Menu
   if (currentSection === "main") {
