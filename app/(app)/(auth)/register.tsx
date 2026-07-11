@@ -73,11 +73,6 @@ export default function RegisterScreen() {
     return !Object.values(newErrors).some((e) => e !== "");
   };
 
-  /**
-   * Generates a deterministic single-digit suffix (1-9) from email + storeSlug.
-   * This ensures the same user always gets the same authEmail for the same store,
-   * fixing the re-login "invalid credentials" bug caused by random suffixes.
-   */
   const getDeterministicSuffix = (email: string, storeSlug: string): number => {
     const input = `${email.toLowerCase()}:${storeSlug}`;
     let hash = 0;
@@ -112,9 +107,6 @@ export default function RegisterScreen() {
       }
 
       // Fetch ALL rows that could be related to this registration:
-      // - rows where email = originalEmail (the real record)
-      // - rows where email = authEmail (ghost rows from Supabase trigger firing before our insert)
-      // - rows where auth_email = authEmail (any existing record for this auth account)
       const { data: allMatches } = await supabase
         .from("reseller_customers")
         .select("id, email, auth_user_id, auth_email")
@@ -235,10 +227,6 @@ export default function RegisterScreen() {
       const storeSlug = useResellerStore.getState().config.storeName;
       const [localPart, domain] = formData.email.split("@");
       const separator = localPart.includes("+") ? "" : "+";
-
-      // Deterministic suffix — same user always gets the same storeEmail for this store.
-      // Fixes the re-login bug where a random suffix created a different Supabase auth
-      // account on each registration attempt.
       const suffix = getDeterministicSuffix(formData.email, storeSlug);
       const storeEmail = `${localPart}${separator}${storeSlug}${suffix}@${domain}`;
 
