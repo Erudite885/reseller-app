@@ -1,0 +1,198 @@
+name: Build Global Reseller APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      reseller_id:
+        description: "Reseller ID (UUID)"
+        required: true
+        type: string
+      config_id:
+        description: "Build Configuration ID (from global_reseller_app_configs)"
+        required: true
+        type: string
+      store_name:
+        description: "Store name (used for APK filename, e.g. abdul-sub)"
+        required: true
+        type: string
+      country_code:
+        description: "Country code (e.g., ng, gh, zm)"
+        required: true
+        type: string
+      environment:
+        description: "Build environment"
+        required: false
+        type: string
+        default: "production"
+      version:
+        description: "Version tag for release (e.g., v1.0.0, or leave empty for auto-generated)"
+        required: false
+        type: string
+        default: ""
+
+env:
+  EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
+  EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
+  EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Make scripts executable
+        run: chmod +x scripts/generate-global-reseller-assets.sh scripts/generate-global-google-services.sh
+
+      - name: Generate global reseller assets
+        run: bash scripts/generate-global-reseller-assets.sh
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_SECRET: ${{ secrets.API_SECRET_KEY }}
+          CONFIG_ID: ${{ github.event.inputs.config_id }}
+          COUNTRY_CODE: ${{ github.event.inputs.country_code }}
+
+      - name: Generate google-services.json
+        run: bash scripts/generate-global-google-services.sh
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+
+      - name: Verify Xixapay secrets
+        env:
+          EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
+          EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
+          EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
+        run: |
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_SECRET_KEY" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_SECRET_KEY is empty"; exit 1; fi
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_API_KEY" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_API_KEY is empty"; exit 1; fi
+          if [ -z "$EXPO_PUBLIC_XIXAPAY_BUSINESS_ID" ]; then echo "ERROR: EXPO_PUBLIC_XIXAPAY_BUSINESS_ID is empty"; exit 1; fi
+          echo "All Xixapay secrets present ✓"
+
+      - name: Build Android APK
+        run: |
+          eas build \
+            --platform android \
+            --profile production-apk \
+            --local \
+            --non-interactive \
+            --output="./${{ github.event.inputs.store_name }}.apk"
+        env:
+          EXPO_PUBLIC_BIMBO_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_URL }}
+          EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_BIMBO_SUPABASE_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_XIXAPAY_SECRET_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_SECRET_KEY }}
+          EXPO_PUBLIC_XIXAPAY_API_KEY: ${{ secrets.EXPO_PUBLIC_XIXAPAY_API_KEY }}
+          EXPO_PUBLIC_XIXAPAY_BUSINESS_ID: ${{ secrets.EXPO_PUBLIC_XIXAPAY_BUSINESS_ID }}
+          EXPO_PUBLIC_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_PROJECT_ID }}
+
+      - name: Determine release tag
+        id: release_tag
+        run: |
+          STORE_NAME="${{ github.event.inputs.store_name }}"
+          CONFIG_ID="${{ github.event.inputs.config_id }}"
+          COUNTRY_CODE="${{ github.event.inputs.country_code }}"
+          TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${COUNTRY_CODE}-${STORE_NAME}-${CONFIG_ID:0:8}-${TIMESTAMP}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Release tag: ${TAG}"
+
+      - name: Create Release and Upload APK
+        id: upload_release
+        env:
+          GH_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+        run: |
+          STORE_NAME="${{ github.event.inputs.store_name }}"
+          CONFIG_ID="${{ github.event.inputs.config_id }}"
+          RESELLER_ID="${{ github.event.inputs.reseller_id }}"
+          COUNTRY_CODE="${{ github.event.inputs.country_code }}"
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          TAG="${{ steps.release_tag.outputs.tag }}"
+          APK_PATH="./${STORE_NAME}.apk"
+
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: APK file not found at $APK_PATH"
+            exit 1
+          fi
+
+          RELEASE_NOTES="## Global Reseller APK Build
+
+          ### Build Information
+          - **Reseller ID:** ${RESELLER_ID}
+          - **Config ID:** ${CONFIG_ID}
+          - **Store Name:** ${STORE_NAME}
+          - **Country:** ${COUNTRY_CODE}
+          - **Build Date:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - **Environment:** ${ENVIRONMENT}
+
+          ### Download
+          The APK file is attached below."
+
+          gh release create "$TAG" \
+            --repo "Erudite885/tenant-distribution" \
+            --title "${STORE_NAME} - ${COUNTRY_CODE} - Build ${CONFIG_ID:0:8}" \
+            --notes "${RELEASE_NOTES}" \
+            "$APK_PATH"
+
+          DOWNLOAD_URL="https://github.com/Erudite885/tenant-distribution/releases/download/${TAG}/${STORE_NAME}.apk"
+          echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
+          echo "release_tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "✅ APK uploaded to: ${DOWNLOAD_URL}"
+
+      - name: Notify backend of success
+        if: success()
+        run: |
+          curl -X POST "${{ secrets.API_URL }}/api/reseller/${{ github.event.inputs.country_code }}/webhooks/build" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
+            -d '{
+              "buildId": "${{ github.event.inputs.config_id }}",
+              "status": "completed",
+              "apkUrl": "${{ steps.upload_release.outputs.download_url }}"
+            }'
+
+      - name: Notify backend of failure
+        if: failure()
+        run: |
+          curl -X POST "${{ secrets.API_URL }}/api/reseller/${{ github.event.inputs.country_code }}/webhooks/build" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_SECRET_KEY }}" \
+            -d '{
+              "buildId": "${{ github.event.inputs.config_id }}",
+              "status": "failed",
+              "errorMessage": "Build failed in GitHub Actions"
+            }' || true
+
+      - name: Build Summary
+        if: success()
+        run: |
+          echo "========================================="
+          echo "✅ BUILD COMPLETED SUCCESSFULLY"
+          echo "Store Name  : ${{ github.event.inputs.store_name }}"
+          echo "Country     : ${{ github.event.inputs.country_code }}"
+          echo "Config ID   : ${{ github.event.inputs.config_id }}"
+          echo "Reseller ID : ${{ github.event.inputs.reseller_id }}"
+          echo "Release Tag : ${{ steps.upload_release.outputs.release_tag }}"
+          echo "Download URL: ${{ steps.upload_release.outputs.download_url }}"
+          echo "========================================="
