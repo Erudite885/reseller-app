@@ -19,8 +19,7 @@ if [ -z "$CONFIG_ID" ]; then
 fi
 
 if [ -z "$COUNTRY_CODE" ]; then
-  echo "⚠️ COUNTRY_CODE not provided, attempting to detect..."
-  # Try to extract from config ID or use default
+  echo "⚠️ COUNTRY_CODE not provided, defaulting to 'ng'"
   COUNTRY_CODE="ng"
 fi
 
@@ -28,21 +27,40 @@ echo "📥 Fetching global reseller config..."
 echo "   Config ID: $CONFIG_ID"
 echo "   Country: $COUNTRY_CODE"
 
-# Try the country-specific endpoint first
-CONFIG=$(curl -s "${API_URL}/api/reseller/${COUNTRY_CODE}/config/${CONFIG_ID}" \
-  -H "Authorization: Bearer ${API_SECRET}")
+# ✅ Try the country-specific endpoint first
+CONFIG_RESPONSE=$(curl -s "${API_URL}/api/reseller/${COUNTRY_CODE}/config/${CONFIG_ID}" \
+  -H "Authorization: Bearer ${API_SECRET}" \
+  -H "Accept: application/json")
 
-# If that fails, try the generic build-config endpoint
-if [ -z "$CONFIG" ] || [ "$(echo "$CONFIG" | jq -r '.error // empty')" != "" ]; then
-  echo "⚠️ Country-specific endpoint failed, trying generic endpoint..."
-  CONFIG=$(curl -s "${API_URL}/api/build-config?configId=${CONFIG_ID}" \
-    -H "Authorization: Bearer ${API_SECRET}")
+# ✅ Check if the response is JSON (not HTML)
+if echo "$CONFIG_RESPONSE" | grep -q "^<!"; then
+  echo "⚠️ Country-specific endpoint returned HTML, trying generic endpoint..."
+  
+  # Try the generic build-config endpoint
+  CONFIG_RESPONSE=$(curl -s "${API_URL}/api/build-config?configId=${CONFIG_ID}" \
+    -H "Authorization: Bearer ${API_SECRET}" \
+    -H "Accept: application/json")
 fi
 
-# Validate we got a config
-if [ -z "$CONFIG" ] || [ "$(echo "$CONFIG" | jq -r '.error // empty')" != "" ]; then
-  echo "❌ Failed to fetch config"
-  echo "Response: $CONFIG"
+# ✅ Check if we got valid JSON
+if ! echo "$CONFIG_RESPONSE" | jq -e . > /dev/null 2>&1; then
+  echo "❌ Failed to fetch config - invalid response"
+  echo "Response preview: ${CONFIG_RESPONSE:0:200}"
+  exit 1
+fi
+
+# ✅ Check for error in response
+if [ "$(echo "$CONFIG_RESPONSE" | jq -r '.error // empty')" != "" ]; then
+  echo "❌ API returned error: $(echo "$CONFIG_RESPONSE" | jq -r '.error')"
+  exit 1
+fi
+
+CONFIG="$CONFIG_RESPONSE"
+
+# ✅ Validate config has required fields
+if ! echo "$CONFIG" | jq -e '.storeName' > /dev/null 2>&1; then
+  echo "❌ Config missing storeName"
+  echo "Raw config: $CONFIG"
   exit 1
 fi
 
