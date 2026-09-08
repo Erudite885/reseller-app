@@ -4,6 +4,33 @@
 repo. This file just cross-references it and tracks a short status
 mirror so anyone landing in this repo first knows where to go.
 
+## Session bootstrap (do this before anything else)
+
+Every new session working with this repo — whether it's cloning fresh or
+already has a local copy — should always land on the **latest commit of
+the most recently updated branch**, not just `main`:
+
+1. Fetch all branches:
+   ```bash
+   git fetch --all
+   ```
+2. Find the most recently updated branch:
+   ```bash
+   git for-each-ref --sort=-committerdate refs/remotes --format='%(committerdate:iso8601) %(refname:short) %(objectname:short)'
+   ```
+3. Check it out at its latest commit:
+   ```bash
+   git checkout -B <branch-name> origin/<branch-name>
+   ```
+4. Re-read this `HANDOVER.md` from that checked-out branch, then follow
+   its pointer to the master handover in `Edges_LandingPage` (also
+   checked out at **its** latest branch, per the same bootstrap steps
+   there — the two repos' "latest branch" won't always share the same
+   name, check each independently).
+
+Same rule as the web repo: `main` here can be stale — the latest branch
+is the source of truth for what to work from, not `main`.
+
 ## Master handover
 
 - Repo: [Edges_LandingPage](https://github.com/Edges-Enterprise/Edges_LandingPage)
