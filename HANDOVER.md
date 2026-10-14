@@ -66,6 +66,30 @@ live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
 not per-client. Nothing to run from this repo for that task. Check the
 master log table for the latest update before starting work.
 
+## Build pipeline (APK workflows) — 2026-10-14
+
+**Node bump (fixed locally, not yet pushed).** Both APK workflows
+(`.github/workflows/build-global-reseller-apk.yml`,
+`.github/workflows/build-reseller-apk.yml`) pinned `node-version: "20"`,
+but `expo/expo-github-action@v8` with `expo-version: latest` now installs
+a CLI whose `@oclif/plugin-autocomplete` requires Node >=22. Result: the
+"Setup Expo" step failed on every run, so no APK was ever built and all
+builds sat at "building" forever. Bumped both to `node-version: "22"`.
+
+Verified locally: under Node 20 the exact CI error reproduces
+(`error @oclif/plugin-autocomplete@3.3.0: The engine "node" is
+incompatible ... Expected version ">=22.0.0". Got "20.20.2"`); under
+Node 22 the same install succeeds and `npm ci` also passes.
+
+**IMPORTANT:** the web app dispatches this workflow with `ref: "main"`
+(see `triggerAppBuild.ts`), so the fix only takes effect once it is on
+`main` — not just on `handover/supabase-dump`.
+
+Still open (tracked in the master handover in Edges_LandingPage): the
+build callback sends `buildId = config_id` instead of the real
+`global_app_builds.id`, and `API_URL` returns a Next.js 404 for
+`/api/reseller/<cc>/webhooks/build`, so failures are never recorded.
+
 ## Handoff process for patches to this repo
 
 See the master handover's **"Standing handoff process"** section — it's
