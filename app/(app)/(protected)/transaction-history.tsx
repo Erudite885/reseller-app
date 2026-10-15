@@ -1,7 +1,9 @@
 // app/(app)/(protected)/transaction-history.tsx
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getCountryConfig } from "@/constants/countryConfig";
 import { useTheme } from "@/hooks/useTheme";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import {
@@ -19,6 +21,10 @@ type FilterType = "all" | "data" | "airtime" | "wallet";
 
 export default function TransactionHistoryScreen() {
   const { colors, shadows } = useTheme();
+  // Country-aware currency/locale (8.b).
+  const country = getCountryConfig(
+    useResellerStore.getState().config.countryCode,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -88,7 +94,7 @@ export default function TransactionHistoryScreen() {
     if (diffDays === 1) return "Yesterday";
     if (diffDays < 7) return `${diffDays} days ago`;
 
-    return date.toLocaleDateString("en-NG", {
+    return date.toLocaleDateString(country.locale, {
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -97,7 +103,7 @@ export default function TransactionHistoryScreen() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString("en-NG", {
+    return date.toLocaleTimeString(country.locale, {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -118,7 +124,7 @@ export default function TransactionHistoryScreen() {
 
   const formatCurrency = (amount: number | string) => {
     const num = typeof amount === "string" ? parseFloat(amount) : amount;
-    return num.toLocaleString("en-NG", {
+    return num.toLocaleString(country.locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -380,7 +386,7 @@ export default function TransactionHistoryScreen() {
                     transaction.type === "data"
                       ? "-"
                       : "+"}
-                    ₦{formatCurrency(transaction.amount)}
+                    {country.currencySymbol}{formatCurrency(transaction.amount)}
                   </Text>
                   <View
                     style={{
@@ -519,7 +525,7 @@ export default function TransactionHistoryScreen() {
                   selectedTransaction.type === "data"
                     ? "-"
                     : "+"}
-                  ₦{formatCurrency(selectedTransaction.amount)}
+                  {country.currencySymbol}{formatCurrency(selectedTransaction.amount)}
                 </Text>
                 <View
                   style={{
@@ -563,13 +569,13 @@ export default function TransactionHistoryScreen() {
               {selectedTransaction.previous_balance && (
                 <DetailRow
                   label="Previous Balance"
-                  value={`₦${formatCurrency(selectedTransaction.previous_balance)}`}
+                  value={`${country.currencySymbol}${formatCurrency(selectedTransaction.previous_balance)}`}
                 />
               )}
               {selectedTransaction.new_balance && (
                 <DetailRow
                   label="New Balance"
-                  value={`₦${formatCurrency(selectedTransaction.new_balance)}`}
+                  value={`${country.currencySymbol}${formatCurrency(selectedTransaction.new_balance)}`}
                 />
               )}
               <DetailRow

@@ -3,7 +3,11 @@
 interface ResellerInfo {
   store_name: string;
   email: string;
+  /** Country display name (8.b.iv). Defaults to Nigeria when unset. */
+  country?: string;
 }
+
+const countryName = (reseller: ResellerInfo) => reseller.country || "Nigeria";
 
 export function generatePrivacyPolicy(reseller: ResellerInfo): string {
   return `
@@ -17,7 +21,7 @@ By using our app, you acknowledge and consent to the practices described herein.
 By accessing or using the ${reseller.store_name} mobile application, you agree to this Privacy Policy. If you do not agree with our policies or practices, please do not use the application.
 
 2. Who We Are
-${reseller.store_name} is a mobile data reselling platform based in Nigeria. We provide secure, affordable, and fast mobile data services to users across Nigeria.
+${reseller.store_name} is a mobile data reselling platform based in ${countryName(reseller)}. We provide secure, affordable, and fast mobile data services to users across ${countryName(reseller)}.
 • 📧 Contact Email: ${reseller.email}
 
 3. Information We Collect
@@ -92,7 +96,7 @@ These Terms and Conditions govern your access to and use of our mobile applicati
 By using the platform, you agree to be bound by these Terms.
 
 1. About Us
-${reseller.store_name} is a Nigerian-based technology company offering mobile data services nationwide.
+${reseller.store_name} is a technology company based in ${countryName(reseller)} offering mobile data services nationwide.
 • 📧 Email: ${reseller.email}
 
 2. Acceptance of Terms
@@ -149,7 +153,7 @@ We reserve the right to suspend or terminate accounts at any time. This may resu
 We may update these Terms periodically. Continued use indicates acceptance.
 
 12. Governing Law
-These Terms are governed by the laws of the Federal Republic of Nigeria.
+These Terms are governed by the laws of ${countryName(reseller)}.
 
 13. Contact Us
 ${reseller.store_name}

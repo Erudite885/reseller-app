@@ -73,6 +73,9 @@ export default function RegisterScreen() {
     return !Object.values(newErrors).some((e) => e !== "");
   };
 
+  // Per-store derived auth email. Kept from the legacy flow: it gives each
+  // store its own auth user for the same shopper email, which the
+  // global_* model preserves (a customer row is keyed by (reseller_id, email)).
   const getDeterministicSuffix = (email: string, storeSlug: string): number => {
     const input = `${email.toLowerCase()}:${storeSlug}`;
     let hash = 0;
@@ -83,134 +86,37 @@ export default function RegisterScreen() {
   };
 
   const registerCustomerToReseller = async (
-    userId: string,
+    _userId: string,
     originalEmail: string,
     authEmail: string,
   ) => {
+    // Find-or-create the customer in global_customers through the
+    // service-role function (the app only holds the publishable key and has
+    // no global_* write policy). The function resolves the store from
+    // resellerId, so there is no store_name lookup and no ghost-row cleanup
+    // (that was a legacy reseller_customers quirk).
+    const resellerId = useResellerStore.getState().config.resellerId;
+    if (!resellerId) {
+      console.log("[Register] No resellerId configured; skipping customer link");
+      return;
+    }
+
     try {
-      const storeSlug = useResellerStore.getState().config.storeName;
-      const username = originalEmail.split("@")[0];
-
-      const { data: reseller, error: resellerError } = await supabase
-        .from("resellers")
-        .select("id")
-        .eq("store_name", storeSlug)
-        .eq("status", "active")
-        .maybeSingle();
-
-      if (resellerError || !reseller) {
-        console.log(
-          "[Register] No active reseller found for store:",
-          storeSlug,
-        );
-        return;
+      const { data, error } = await supabase.functions.invoke(
+        "global-store-register-customer",
+        {
+          body: { resellerId, email: originalEmail, authEmail },
+        },
+      );
+      if (error) throw error;
+      if (data?.success === false) {
+        throw new Error(data.error || "Failed to register customer");
       }
-
-      // Fetch ALL rows that could be related to this registration:
-      const { data: allMatches } = await supabase
-        .from("reseller_customers")
-        .select("id, email, auth_user_id, auth_email")
-        .eq("reseller_id", reseller.id)
-        .or(
-          `email.eq.${originalEmail},email.eq.${authEmail},auth_email.eq.${authEmail}`,
-        );
-
-      // The "real" record is the one whose email == originalEmail; fall back to first match
-      const existingCustomer =
-        allMatches?.find((c) => c.email === originalEmail) ??
-        allMatches?.[0] ??
-        null;
-
-      // Ghost rows: any row where email === authEmail (the storeEmail leaked into the email column)
-      const ghostRows =
-        allMatches?.filter(
-          (c) => c.id !== existingCustomer?.id && c.email === authEmail,
-        ) ?? [];
-
-      if (ghostRows.length > 0) {
-        await supabase
-          .from("reseller_customers")
-          .delete()
-          .in(
-            "id",
-            ghostRows.map((g) => g.id),
-          );
-        console.log(
-          "[Register] 🗑️ Cleaned up",
-          ghostRows.length,
-          "ghost row(s)",
-        );
-      }
-
-      if (existingCustomer) {
-        const updates: any = {};
-        if (!existingCustomer.auth_user_id) updates.auth_user_id = userId;
-        if (!existingCustomer.auth_email) updates.auth_email = authEmail;
-
-        if (Object.keys(updates).length > 0) {
-          const { error: updateError } = await supabase
-            .from("reseller_customers")
-            .update(updates)
-            .eq("id", existingCustomer.id);
-
-          if (updateError) {
-            console.error("[Register] Failed to update customer:", updateError);
-          } else {
-            console.log("[Register] ✅ Customer updated:", updates);
-          }
-        } else {
-          console.log("[Register] Customer already fully registered");
-        }
-      } else {
-        // No existing record at all — create a fresh one
-        const { error: insertError } = await supabase
-          .from("reseller_customers")
-          .insert({
-            reseller_id: reseller.id,
-            email: originalEmail,
-            auth_email: authEmail,
-            first_name: username,
-            auth_user_id: userId,
-          });
-
-        if (insertError) {
-          console.error("[Register] Failed to create customer:", insertError);
-          return;
-        }
-        console.log(
-          "[Register] ✅ Customer created with auth_email:",
-          authEmail,
-        );
-      }
-
-      // Get the canonical customer record (by originalEmail) to create/check wallet
-      const { data: customer } = await supabase
-        .from("reseller_customers")
-        .select("id")
-        .eq("reseller_id", reseller.id)
-        .eq("email", originalEmail)
-        .maybeSingle();
-
-      if (customer) {
-        const { data: existingWallet } = await supabase
-          .from("reseller_customer_wallets")
-          .select("id")
-          .eq("reseller_id", reseller.id)
-          .eq("customer_id", customer.id)
-          .maybeSingle();
-
-        if (!existingWallet) {
-          await supabase.from("reseller_customer_wallets").insert({
-            reseller_id: reseller.id,
-            customer_id: customer.id,
-            balance: 0,
-            total_spent: 0,
-          });
-          console.log("[Register] ✅ Customer wallet created");
-        }
-      }
+      console.log("[Register] ✅ Customer linked:", data?.customerId);
     } catch (error) {
-      console.error("[Register] Error:", error);
+      // Non-fatal: the customer is linked on first authenticated login
+      // (app/_layout.tsx) if this early attempt fails.
+      console.error("[Register] Customer link error:", error);
     }
   };
 

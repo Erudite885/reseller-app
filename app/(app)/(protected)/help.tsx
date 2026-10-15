@@ -1,7 +1,9 @@
 // app/(app)/(protected)/help.tsx
 import { Card } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getCountryConfig } from "@/constants/countryConfig";
 import { useTheme } from "@/hooks/useTheme";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -25,6 +27,13 @@ export default function HelpScreen() {
   const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  // Country-aware copy (8.b): currency symbol and network names from the
+  // store's country, instead of the Nigeria-only defaults.
+  const country = getCountryConfig(
+    useResellerStore.getState().config.countryCode,
+  );
+  const networkNames = country.telecoms.map((t) => t.name).join(", ");
 
   const categories: Category[] = [
     { id: "all", name: "All", icon: "📚" },
@@ -97,14 +106,14 @@ export default function HelpScreen() {
       category: "airtime",
       question: "What is the minimum airtime I can purchase?",
       answer:
-        "The minimum airtime purchase amount is ₦50. There's no maximum limit, but ensure you have sufficient wallet balance to complete the transaction.",
+        `The minimum airtime purchase amount is ${country.currencySymbol}50. There's no maximum limit, but ensure you have sufficient wallet balance to complete the transaction.`,
     },
     {
       id: "10",
       category: "airtime",
       question: "Can I buy airtime for all networks?",
       answer:
-        "Yes, we support all major Nigerian networks including MTN, Airtel, Glo, and 9mobile. Select your preferred network when making a purchase.",
+        `Yes, we support all major networks including ${networkNames}. Select your preferred network when making a purchase.`,
     },
     {
       id: "11",

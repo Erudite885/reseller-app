@@ -69,22 +69,18 @@ export function getAssetSource(assetPath: string | undefined): any {
 // ============================================
 async function getCustomerAuthEmail(
   originalEmail: string,
-  storeName: string,
+  resellerId: string,
 ): Promise<string | null> {
   try {
-    // Get the Supabase URL from your environment
     const supabaseUrl = process.env.EXPO_PUBLIC_BIMBO_SUPABASE_URL;
-
     if (!supabaseUrl) {
       console.error("[Edge Function] SUPABASE_URL not configured");
       return null;
     }
 
-    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/get-customer-auth-email`;
-
-    console.log("[Edge Function] Calling:", edgeFunctionUrl);
-
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/global-store-customer-auth-email`;
     const supabaseAnonKey = process.env.EXPO_PUBLIC_BIMBO_SUPABASE_ANON_KEY;
+
     const response = await fetch(edgeFunctionUrl, {
       method: "POST",
       headers: {
@@ -93,22 +89,16 @@ async function getCustomerAuthEmail(
         ...(supabaseAnonKey && { Authorization: `Bearer ${supabaseAnonKey}` }),
       },
       body: JSON.stringify({
-        originalEmail: originalEmail.trim().toLowerCase(),
-        storeName: storeName.trim().toLowerCase(),
+        resellerId,
+        email: originalEmail.trim().toLowerCase(),
       }),
     });
 
     const data = await response.json();
-
     if (data.error) {
       console.error("[Edge Function] Error:", data.error);
       return null;
     }
-
-    console.log(
-      "[Edge Function] Response:",
-      data.success ? "Found" : "Not found",
-    );
     return data.authEmail || null;
   } catch (error) {
     console.error("[Edge Function] Network error:", error);
@@ -144,60 +134,35 @@ export default function LoginScreen() {
 
     try {
       const storeSlug = useResellerStore.getState().config.storeName;
+      const resellerId = useResellerStore.getState().config.resellerId;
       let loginEmail = email.trim().toLowerCase();
       let loginMethod = "direct";
 
-      // STEP 1: Try to get auth_email from edge function
-      const authEmail = await getCustomerAuthEmail(email, storeSlug);
+      // STEP 1: Try to get auth_email from the edge function
+      const authEmail = resellerId
+        ? await getCustomerAuthEmail(email, resellerId)
+        : null;
 
       if (authEmail) {
         // Customer found - use their stored auth email for login
         loginEmail = authEmail;
         loginMethod = "edge_function";
-        console.log("[Login] Using auth_email from edge function:", loginEmail);
       } else {
-        // STEP 2: Fallback - try to find by auth_email directly in Supabase
-        console.log(
-          "[Login] No auth_email from edge function, trying fallback",
-        );
-
-        const { data: reseller, error: resellerError } = await supabase
-          .from("resellers")
-          .select("id")
-          .eq("store_name", storeSlug)
-          .eq("status", "active")
-          .maybeSingle();
-
-        if (!resellerError && reseller) {
-          const { data: customerRecord } = await supabase
-            .from("reseller_customers")
-            .select("auth_email")
-            .eq("email", email.trim().toLowerCase())
-            .eq("reseller_id", reseller.id)
-            .maybeSingle();
-
-          if (customerRecord?.auth_email) {
-            loginEmail = customerRecord.auth_email;
-            loginMethod = "direct_supabase";
-            console.log(
-              "[Login] Fallback found auth_email in Supabase:",
-              loginEmail,
-            );
-          } else {
-            const [rawLocal, domain] = email.trim().toLowerCase().split("@");
-            const baseLocal = rawLocal.split("+")[0];
-            const input = `${email.trim().toLowerCase()}:${storeSlug}`;
-            let hash = 0;
-            for (let i = 0; i < input.length; i++) {
-              hash = (Math.imul(31, hash) + input.charCodeAt(i)) | 0;
-            }
-            const suffix = (Math.abs(hash) % 9) + 1;
-            const separator = rawLocal.includes("+") ? "" : "+";
-            loginEmail = `${rawLocal}${separator}${storeSlug}${suffix}@${domain}`;
-            loginMethod = "reconstructed";
-            console.log("[Login] Reconstructed storeEmail:", loginEmail);
-          }
+        // STEP 2: No stored auth_email - reconstruct the derived store email
+        // from the same deterministic scheme registration uses. The legacy
+        // direct-Supabase fallback is gone: the app cannot read
+        // global_customers (service-role only), so reconstruction is the
+        // only remaining path.
+        const [rawLocal, domain] = email.trim().toLowerCase().split("@");
+        const input = `${email.trim().toLowerCase()}:${storeSlug}`;
+        let hash = 0;
+        for (let i = 0; i < input.length; i++) {
+          hash = (Math.imul(31, hash) + input.charCodeAt(i)) | 0;
         }
+        const suffix = (Math.abs(hash) % 9) + 1;
+        const separator = rawLocal.includes("+") ? "" : "+";
+        loginEmail = `${rawLocal}${separator}${storeSlug}${suffix}@${domain}`;
+        loginMethod = "reconstructed";
       }
 
       // STEP 3: Attempt login with the determined email

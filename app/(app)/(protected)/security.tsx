@@ -3,6 +3,7 @@
 import { Button, Input } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { useProfile } from "@/hooks/useProfiles";
+import { useTransactionPin } from "@/hooks/useTransactionPin";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
@@ -396,7 +397,7 @@ export default function SecurityScreen() {
 
   // Fetch profile to check if user has a transaction PIN
   const { data: profile } = useProfile();
-  const hasTransactionPin = profile?.transaction_pin != null;
+  const hasTransactionPin = !!profile?.has_transaction_pin;
   const userType = profile?.account_type; // "reseller" or "customer"
 
   // Navigation
@@ -456,27 +457,17 @@ export default function SecurityScreen() {
     setPinErrors({ ...pinErrors, [field]: "" });
   };
 
-  // PIN mutation - works for both resellers and customers
+  // PIN mutation - server-verified via global-store-pin (the stored PIN is
+  // never sent to the client). Change requires the current PIN; set does not.
+  const { updatePin, createPin } = useTransactionPin();
   const pinMutation = useMutation({
     mutationFn: async ({ newPinValue }: { newPinValue: string }) => {
       if (!user?.id || !profile?.id) throw new Error("No user found");
 
-      if (userType === "reseller") {
-        // Update reseller PIN
-        const { error } = await supabase
-          .from("resellers")
-          .update({ transaction_pin: newPinValue })
-          .eq("id", profile.id);
-
-        if (error) throw error;
+      if (hasTransactionPin) {
+        await updatePin({ oldPin: pinData.current, newPin: newPinValue });
       } else {
-        // Update customer PIN
-        const { error } = await supabase
-          .from("reseller_customers")
-          .update({ transaction_pin: newPinValue })
-          .eq("id", profile.id);
-
-        if (error) throw error;
+        await createPin({ newPin: newPinValue });
       }
     },
     onSuccess: () => {

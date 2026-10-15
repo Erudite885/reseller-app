@@ -4,6 +4,8 @@ import React, { useState, useRef } from "react";
 import { View, Text, Pressable, FlatList, Dimensions } from "react-native";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getPlanColor } from "@/constants/helpers";
+import { getCountryConfig } from "@/constants/countryConfig";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 
 const PLANS_PER_PAGE = 15;
@@ -30,6 +32,11 @@ export function PlanCarousel({
   colors,
   shadows,
 }: PlanCarouselProps) {
+  // Country-aware currency symbol (8.b) - plans are priced in the store's
+  // country currency, not always naira.
+  const country = getCountryConfig(
+    useResellerStore.getState().config.countryCode,
+  );
   const totalPages = Math.ceil(plans.length / PLANS_PER_PAGE);
   const [page, setPage] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -114,7 +121,8 @@ export function PlanCarousel({
                         marginBottom: Spacing.xs / 2,
                       }}
                     >
-                      ₦{plan.price.toLocaleString()}
+                      {country.currencySymbol}
+                      {plan.price.toLocaleString()}
                     </Text>
 
                     <Text

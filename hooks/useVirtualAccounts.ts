@@ -1,9 +1,18 @@
 // hooks/useVirtualAccounts.ts
+//
+// Task 8, branch 8.a.ii.zq. The caller's virtual accounts through the
+// global-store-wallet edge function (global_virtual_accounts for a reseller,
+// global_customer_virtual_accounts for a customer). Replaces the legacy
+// direct reads, which were Nigeria-only.
+//
+// The create path still targets the existing
+// create-mobile-customer-virtual-account function (an account-creation
+// integration outside Task 8's read-layer scope).
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
+import { callStoreFunction } from "@/lib/storeApi";
 
 export interface VirtualAccount {
   id: string;
@@ -15,105 +24,38 @@ export interface VirtualAccount {
   created_at: string;
 }
 
-function getStoreSlug(): string {
-  return useResellerStore.getState().config.storeName;
+interface WalletResponse {
+  wallet: { id: string; balance: number; currency: string | null } | null;
+  virtual_accounts: VirtualAccount[];
 }
 
-async function getCurrentResellerId(): Promise<string | null> {
-  const storeSlug = getStoreSlug();
-  const { data } = await supabase
-    .from("resellers")
-    .select("id")
-    .eq("store_name", storeSlug)
-    .eq("status", "active")
-    .single();
-  return data?.id || null;
-}
-
-async function getUserType(userId: string, resellerId: string) {
-  const { data: reseller } = await supabase
-    .from("resellers")
-    .select("id")
-    .eq("auth_user_id", userId)
-    .eq("id", resellerId)
-    .single();
-
-  if (reseller) return { type: "reseller" as const, id: reseller.id };
-
-  const { data: customer } = await supabase
-    .from("reseller_customers")
-    .select("id, email")
-    .eq("auth_user_id", userId)
-    .eq("reseller_id", resellerId)
-    .single();
-
-  if (customer)
-    return {
-      type: "customer" as const,
-      id: customer.id,
-      email: customer.email,
-    };
-
-  return null;
-}
-
-/**
- * Hook to fetch virtual accounts for the current user in this store
- */
 export function useVirtualAccounts() {
   const { user } = useAuthStore();
-  const storeSlug = getStoreSlug();
+  const resellerId = useResellerStore.getState().config.resellerId;
 
   return useQuery({
-    queryKey: ["virtual_accounts", storeSlug, user?.id],
-    queryFn: async () => {
+    queryKey: ["virtual_accounts", resellerId, user?.id],
+    queryFn: async (): Promise<VirtualAccount[]> => {
       if (!user?.id) throw new Error("No user");
-
-      const resellerId = await getCurrentResellerId();
-      if (!resellerId) return [];
-
-      const userType = await getUserType(user.id, resellerId);
-      if (!userType) return [];
-
-      if (userType.type === "reseller") {
-        const { data, error } = await supabase
-          .from("reseller_virtual_accounts")
-          .select("*")
-          .eq("reseller_id", userType.id)
-          .eq("status", "active")
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-        return data as VirtualAccount[];
-      }
-
-      const { data, error } = await supabase
-        .from("reseller_customer_virtual_accounts")
-        .select("*")
-        .eq("reseller_id", resellerId)
-        .eq("customer_id", userType.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data as VirtualAccount[];
+      const data = await callStoreFunction<WalletResponse>("global-store-wallet");
+      return data.virtual_accounts ?? [];
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !!resellerId,
     staleTime: Infinity,
   });
 }
 
 /**
- * Hook to create a virtual account
- * ✅ No parameters needed - uses logged-in user's info from the database
+ * Create a virtual account. No parameters: the function uses the logged-in
+ * user's info from the database.
  */
 export function useCreateVirtualAccount() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const storeSlug = getStoreSlug();
+  const resellerId = useResellerStore.getState().config.resellerId;
+  const storeSlug = useResellerStore.getState().config.storeName;
 
   return useMutation({
-    // ✅ Remove parameters - no args needed
     mutationFn: async () => {
       if (!user?.id) throw new Error("No user");
 
@@ -124,9 +66,7 @@ export function useCreateVirtualAccount() {
 
       const response = await fetch(edgeFunctionUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug,
           userId: user.id,
@@ -148,7 +88,7 @@ export function useCreateVirtualAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["virtual_accounts", storeSlug, user?.id],
+        queryKey: ["virtual_accounts", resellerId, user?.id],
       });
     },
   });

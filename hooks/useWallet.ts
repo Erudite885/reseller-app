@@ -1,101 +1,45 @@
 // hooks/useWallet.ts
+//
+// Task 8, branch 8.a.ii.zq. The caller's wallet through the
+// global-store-wallet edge function (global_wallets for a reseller,
+// global_customer_wallets for a customer). Replaces the legacy direct reads
+// of reseller_wallets / reseller_customer_wallets, which were Nigeria-only.
 
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
+import { callStoreFunction } from "@/lib/storeApi";
 
 export interface Wallet {
   id: string;
   balance: number;
-  total_sales: number;
-  total_profit: number;
+  currency?: string | null;
 }
 
-function getStoreSlug(): string {
-  return useResellerStore.getState().config.storeName;
+interface WalletResponse {
+  wallet: { id: string; balance: number; currency: string | null } | null;
+  virtual_accounts: any[];
 }
 
 export function useWallet() {
   const { user } = useAuthStore();
-  const storeSlug = getStoreSlug();
+  const resellerId = useResellerStore.getState().config.resellerId;
 
   return useQuery({
-    queryKey: ["wallet", storeSlug, user?.id],
-    queryFn: async () => {
+    queryKey: ["wallet", resellerId, user?.id],
+    queryFn: async (): Promise<Wallet> => {
       if (!user?.id) throw new Error("No user");
 
-      // First, get the reseller for this store
-      const { data: reseller, error: resellerError } = await supabase
-        .from("resellers")
-        .select("id, auth_user_id")
-        .eq("store_name", storeSlug)
-        .eq("status", "active")
-        .single();
-
-      if (resellerError || !reseller) {
-        throw new Error("Store not found");
-      }
-
-      // Check if the logged-in user IS the reseller (store owner)
-      if (reseller.auth_user_id === user.id) {
-        // User is a reseller - fetch from reseller_wallets
-        const { data: wallet, error: walletError } = await supabase
-          .from("reseller_wallets")
-          .select("id, balance, total_sales, total_profit")
-          .eq("reseller_id", reseller.id)
-          .maybeSingle();
-
-        if (walletError) throw walletError;
-
-        return {
-          id: wallet?.id || "",
-          balance: wallet?.balance || 0,
-          total_sales: wallet?.total_sales || 0,
-          total_profit: wallet?.total_profit || 0,
-        } as Wallet;
-      }
-
-      // User is a customer - get their customer record first
-      const { data: customer, error: customerError } = await supabase
-        .from("reseller_customers")
-        .select("id")
-        .eq("reseller_id", reseller.id)
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
-
-      if (customerError) throw customerError;
-
-      if (!customer) {
-        // Customer record not found - return zero balance
-        return {
-          id: "",
-          balance: 0,
-          total_sales: 0,
-          total_profit: 0,
-        } as Wallet;
-      }
-
-      // Get customer wallet
-      const { data: wallet, error: walletError } = await supabase
-        .from("reseller_customer_wallets")
-        .select("id, balance, total_spent")
-        .eq("reseller_id", reseller.id)
-        .eq("customer_id", customer.id)
-        .maybeSingle();
-
-      if (walletError) throw walletError;
+      const data = await callStoreFunction<WalletResponse>("global-store-wallet");
 
       return {
-        id: wallet?.id || "",
-        balance: wallet?.balance || 0,
-        total_sales: wallet?.total_spent || 0,
-        total_profit: 0,
-      } as Wallet;
+        id: data.wallet?.id ?? "",
+        balance: data.wallet?.balance ?? 0,
+        currency: data.wallet?.currency ?? null,
+      };
     },
-    enabled: !!user?.id,
-    staleTime: 1000 * 30 * 30, // Consider data fresh for 60 seconds
-    refetchInterval: 360000, // Auto-refetch every 360 seconds
+    enabled: !!user?.id && !!resellerId,
+    staleTime: 1000 * 30,
+    refetchInterval: 360000,
   });
 }
-

@@ -4,6 +4,7 @@ import { Button, Card } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { callStoreFunction } from "@/lib/storeApi";
 import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -37,21 +38,22 @@ export default function ContactScreen() {
   const [resellerEmail, setResellerEmail] = useState("");
   const [storeName, setStoreName] = useState("");
 
-  // Fetch reseller contact info
+  // Fetch store contact info through the public catalog function (the app
+  // cannot read global_reseller_applications directly).
   useEffect(() => {
     const fetchResellerInfo = async () => {
-      const storeSlug = useResellerStore.getState().config.storeName;
+      const resellerId = useResellerStore.getState().config.resellerId;
+      if (!resellerId) return;
 
-      const { data } = await supabase
-        .from("resellers")
-        .select("email, store_name")
-        .eq("store_name", storeSlug)
-        .eq("status", "active")
-        .single();
+      const { data } = await supabase.functions.invoke("global-store-catalog", {
+        body: { resellerId },
+      });
 
-      if (data) {
-        setResellerEmail(data.email);
-        setStoreName(data.store_name);
+      const store = (data as { store?: { name: string; email: string | null } })
+        ?.store;
+      if (store) {
+        setResellerEmail(store.email || "");
+        setStoreName(store.name || "");
       }
     };
 
@@ -96,41 +98,17 @@ export default function ContactScreen() {
         return;
       }
 
-      // Get reseller ID
-      const storeSlug = useResellerStore.getState().config.storeName;
-      const { data: reseller } = await supabase
-        .from("resellers")
-        .select("id")
-        .eq("store_name", storeSlug)
-        .eq("status", "active")
-        .single();
-
-      if (!reseller) {
-        Alert.alert("Error", "Could not find reseller information");
-        return;
-      }
-
-      // Check if user is customer
-      const { data: customer } = await supabase
-        .from("reseller_customers")
-        .select("id")
-        .eq("auth_user_id", user.id)
-        .eq("reseller_id", reseller.id)
-        .single();
-
-      // Save message to database
-      const { error } = await supabase.from("reseller_notifications").insert({
-        reseller_id: reseller.id,
-        notification_type: "support",
+      // Save the message as a support notification via the service-role
+      // function (the app cannot insert into global_notifications directly).
+      await callStoreFunction("global-store-notifications", {
+        action: "create",
+        notificationType: "support",
         message: `Subject: ${subject}\n\n${message}`,
         metadata: {
           from: user.email,
-          customer_id: customer?.id || null,
           sent_at: new Date().toISOString(),
         },
       });
-
-      if (error) throw error;
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(

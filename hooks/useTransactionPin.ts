@@ -1,168 +1,42 @@
 // hooks/useTransactionPin.ts
+//
+// Task 8, branch 8.a.ii.zq. Transaction-PIN set/change via the
+// global-store-pin edge function. The stored PIN is never sent to the
+// client: the profile exposes only `has_transaction_pin`, and the function
+// verifies the current PIN server-side. The client-side validatePin helper
+// is therefore no longer a security check - callers must use the
+// server-verified changePin for changes (see the security screen).
 
-import { supabase } from "@/lib/supabase";
-import { useAuthStore } from "@/store/auth.store";
-import { useResellerStore } from "@/store/resellerStore";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-function getStoreSlug(): string {
-  return useResellerStore.getState().config.storeName;
-}
-
-// Helper to get user record with table info
-async function getUserRecord(userId: string) {
-  // Check reseller first
-  const { data: reseller } = await supabase
-    .from("resellers")
-    .select("id, transaction_pin")
-    .eq("auth_user_id", userId)
-    .single();
-
-  if (reseller) {
-    return { 
-      table: "resellers", 
-      idColumn: "id", 
-      id: reseller.id,
-      currentPin: reseller.transaction_pin,
-      hasUpdatedAt: true // resellers have updated_at
-    };
-  }
-
-  // Check customer
-  const storeSlug = getStoreSlug();
-  const { data: resellerStore } = await supabase
-    .from("resellers")
-    .select("id")
-    .eq("store_name", storeSlug)
-    .single();
-
-  if (resellerStore) {
-    const { data: customer } = await supabase
-      .from("reseller_customers")
-      .select("id, transaction_pin")
-      .eq("auth_user_id", userId)
-      .eq("reseller_id", resellerStore.id)
-      .single();
-
-    if (customer) {
-      return { 
-        table: "reseller_customers", 
-        idColumn: "id", 
-        id: customer.id,
-        currentPin: customer.transaction_pin,
-        hasUpdatedAt: false // customers do NOT have updated_at
-      };
-    }
-  }
-
-  return null;
-}
+import { useAuthStore } from "@/store/auth.store";
+import { callStoreFunction } from "@/lib/storeApi";
 
 export function useTransactionPin() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  const validatePin = (
-    enteredPin: string,
-    storedPin?: string | null,
-  ): boolean => {
-    if (!storedPin) return false;
-    return enteredPin === storedPin;
-  };
-
-  // FIXED: Create PIN mutation - only update transaction_pin
-  const createPinMutation = useMutation({
-    mutationFn: async ({ newPin }: { newPin: string; profileId?: string }) => {
+  const setPinMutation = useMutation({
+    mutationFn: async ({ newPin }: { newPin: string }) => {
       if (!user?.id) throw new Error("No user authenticated");
-      if (!newPin || newPin.length !== 4) {
-        throw new Error("PIN must be exactly 4 digits");
-      }
-
-      const userRecord = await getUserRecord(user.id);
-      if (!userRecord) {
-        throw new Error("User not found");
-      }
-
-      // CRITICAL FIX: Only update transaction_pin
-      // DO NOT include updated_at for customers (table doesn't have it)
-      const updateData: any = { 
-        transaction_pin: newPin 
-      };
-      
-      // Only add updated_at for resellers (who have the column)
-      if (userRecord.hasUpdatedAt) {
-        updateData.updated_at = new Date().toISOString();
-      }
-
-      const { data, error } = await supabase
-        .from(userRecord.table)
-        .update(updateData)
-        .eq(userRecord.idColumn, userRecord.id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Supabase update error:", error);
-        throw new Error(error.message || "Failed to save PIN");
-      }
-      
-      return data;
+      if (!/^\d{4}$/.test(newPin)) throw new Error("PIN must be exactly 4 digits");
+      await callStoreFunction("global-store-pin", { action: "set", newPin });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
     },
   });
 
-  // FIXED: Update PIN mutation - only update transaction_pin
-  const updatePinMutation = useMutation({
-    mutationFn: async ({
-      oldPin,
-      newPin,
-      storedPin,
-    }: {
-      oldPin: string;
-      newPin: string;
-      profileId?: string;
-      storedPin?: string | null;
-    }) => {
+  const changePinMutation = useMutation({
+    mutationFn: async ({ oldPin, newPin }: { oldPin: string; newPin: string }) => {
       if (!user?.id) throw new Error("No user authenticated");
-      
-      if (!validatePin(oldPin, storedPin)) {
-        throw new Error("Current PIN is incorrect");
-      }
-      
-      if (!newPin || newPin.length !== 4) {
+      if (!/^\d{4}$/.test(newPin)) {
         throw new Error("New PIN must be exactly 4 digits");
       }
-
-      const userRecord = await getUserRecord(user.id);
-      if (!userRecord) {
-        throw new Error("User not found");
-      }
-
-      // Only update transaction_pin
-      const updateData: any = { 
-        transaction_pin: newPin 
-      };
-      
-      // Only add updated_at for resellers
-      if (userRecord.hasUpdatedAt) {
-        updateData.updated_at = new Date().toISOString();
-      }
-
-      const { data, error } = await supabase
-        .from(userRecord.table)
-        .update(updateData)
-        .eq(userRecord.idColumn, userRecord.id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Supabase update error:", error);
-        throw new Error(error.message || "Failed to update PIN");
-      }
-      
-      return data;
+      await callStoreFunction("global-store-pin", {
+        action: "change",
+        oldPin,
+        newPin,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
@@ -170,10 +44,9 @@ export function useTransactionPin() {
   });
 
   return {
-    validatePin,
-    createPin: createPinMutation.mutateAsync,
-    updatePin: updatePinMutation.mutateAsync,
-    isCreatingPin: createPinMutation.isPending,
-    isUpdatingPin: updatePinMutation.isPending,
+    createPin: setPinMutation.mutateAsync,
+    updatePin: changePinMutation.mutateAsync,
+    isCreatingPin: setPinMutation.isPending,
+    isUpdatingPin: changePinMutation.isPending,
   };
 }
