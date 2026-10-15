@@ -18,7 +18,10 @@ export function usePurchaseData() {
 
   return useMutation({
     mutationFn: async (purchaseData: {
-      plan_id: number;
+      // global_base_plans.provider_plan_id (string). NOTE: this hook still
+      // calls the legacy purchase-data function; repointing it to
+      // global-purchase-data is step 8.c.i.
+      plan_id: string;
       phoneNumber: string;
       transactionPin: string;
     }) => {

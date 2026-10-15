@@ -60,7 +60,7 @@ export default function HomeScreen() {
   // Service Selection State
   const [serviceType, setServiceType] = useState<"data" | "airtime">("data");
   const [network, setNetwork] = useState("");
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);

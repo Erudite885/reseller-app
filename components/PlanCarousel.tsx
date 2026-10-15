@@ -9,16 +9,16 @@ import * as Haptics from "expo-haptics";
 const PLANS_PER_PAGE = 15;
 
 interface Plan {
-  plan_id: number;
+  plan_id: string;
   plan_name: string;
   price: number;
-  validity: string;
+  validity?: string;
 }
 
 interface PlanCarouselProps {
   plans: Plan[];
-  selectedPlanId: number | null;
-  onSelectPlan: (planId: number) => void;
+  selectedPlanId: string | null;
+  onSelectPlan: (planId: string) => void;
   colors: any;
   shadows: any;
 }
