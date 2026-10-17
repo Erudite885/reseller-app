@@ -66,29 +66,30 @@ live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
 not per-client. Nothing to run from this repo for that task. Check the
 master log table for the latest update before starting work.
 
-## Build pipeline (APK workflows) — 2026-10-14
+## Build pipeline (APK workflows) — updated 2026-10-17
 
-**Node bump (fixed locally, not yet pushed).** Both APK workflows
-(`.github/workflows/build-global-reseller-apk.yml`,
-`.github/workflows/build-reseller-apk.yml`) pinned `node-version: "20"`,
-but `expo/expo-github-action@v8` with `expo-version: latest` now installs
-a CLI whose `@oclif/plugin-autocomplete` requires Node >=22. Result: the
-"Setup Expo" step failed on every run, so no APK was ever built and all
-builds sat at "building" forever. Bumped both to `node-version: "22"`.
+**Node bump — LANDED.** Both APK workflows pinned `node-version: "20"`, but
+`expo/expo-github-action@v8` with `expo-version: latest` installs a CLI whose
+`@oclif/plugin-autocomplete` requires Node >=22. Bumped both to
+`node-version: "22"`; this is on `handover/supabase-dump` (and thus in CI).
+**CI-confirmed 2026-10-17:** run `39058017316` (Roseline) cleared "Setup Expo"
+and "Install dependencies" — the old failure is gone. `main` still has Node 20.
 
-Verified locally: under Node 20 the exact CI error reproduces
-(`error @oclif/plugin-autocomplete@3.3.0: The engine "node" is
-incompatible ... Expected version ">=22.0.0". Got "20.20.2"`); under
-Node 22 the same install succeeds and `npm ci` also passes.
+The web dispatches this workflow with `ref: handover/supabase-dump`
+(`BUILD_WORKFLOW_REF`), so the branch is the right target for now.
 
-**IMPORTANT:** the web app dispatches this workflow with `ref: "main"`
-(see `triggerAppBuild.ts`), so the fix only takes effect once it is on
-`main` — not just on `handover/supabase-dump`.
-
-Still open (tracked in the master handover in Edges_LandingPage): the
-build callback sends `buildId = config_id` instead of the real
-`global_app_builds.id`, and `API_URL` returns a Next.js 404 for
-`/api/reseller/<cc>/webhooks/build`, so failures are never recorded.
+**Still open — and the real blocker as of 2026-10-17:** the asset step
+(`scripts/generate-global-reseller-assets.sh`) fetches the build config from
+`${API_URL}/api/reseller/${COUNTRY_CODE}/config/${CONFIG_ID}`, and that route
+returns a **404 on the live production host**. Root cause: the web repo
+(`Edges-Enterprise/Edges_LandingPage`) has **never been deployed to
+production** — Vercel shows only `Preview` deployments, and
+`edges-landing-page.vercel.app` serves a stale `main` that predates the
+storefront/config work. So no APK can be built until the web is deployed to
+production with the `handover/supabase-dump` lineage. The same root cause
+explains the build-callback 404. See the master handover (`Edges_LandingPage`,
+`HANDOVER.md`) "The web has never been deployed to production" and Blocker 3 in
+`TASK-8-BOARD.md`.
 
 ## Handoff process for patches to this repo
 
