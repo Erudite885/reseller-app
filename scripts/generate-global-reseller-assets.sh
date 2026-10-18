@@ -69,7 +69,7 @@ echo "$CONFIG" > reseller-config.json
 
 # Extract values with fallbacks
 STORE_NAME=$(echo "$CONFIG" | jq -r '.storeName // .config.storeName // "reseller"')
-APP_NAME=$(echo "$CONFIG" | jq -r '.appName // .config.appName // $STORE_NAME')
+APP_NAME=$(echo "$CONFIG" | jq -r --arg fallback "$STORE_NAME" '.appName // .config.appName // $fallback')
 PRIMARY_COLOR=$(echo "$CONFIG" | jq -r '.theme.primary // .config.theme.primary // "#379114"')
 
 # Package name extraction - try multiple paths
