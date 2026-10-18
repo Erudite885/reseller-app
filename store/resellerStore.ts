@@ -26,6 +26,19 @@ export interface ResellerAppConfig {
 }
 
 export interface ResellerConfig {
+  /**
+   * global_reseller_applications.id for this store. Present in the build
+   * config (triggerAppBuild writes it; the config API echoes it), so the app
+   * never needs a store-name -> id lookup. Optional only because local dev
+   * without a generated reseller-config.json falls back to defaultConfig.
+   */
+  resellerId?: string;
+  /**
+   * ISO country code for this store (e.g. "ng", "gh"). Lowercase here; the
+   * catalog function derives country server-side, but 8.b needs it for
+   * currency/telecoms presentation.
+   */
+  countryCode?: string;
   appName: string;
   slug: string;
   storeName: string;

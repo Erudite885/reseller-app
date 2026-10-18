@@ -19,6 +19,7 @@ import {
 import { queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { callStoreFunction } from "@/lib/storeApi";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
 
@@ -124,52 +125,13 @@ async function registerForPushNotificationsAsync() {
 // ============================================
 // Check if Push Token Already Exists
 // ============================================
-async function hasExistingPushToken(userId: string): Promise<boolean> {
+async function hasExistingPushToken(): Promise<boolean> {
   try {
-    const storeSlug = useResellerStore.getState().config.storeName;
-
-    const { data: reseller } = await supabase
-      .from("resellers")
-      .select("push_token, fcm_token, notifications_enabled")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
-
-    if (reseller) {
-      const hasToken = !!(
-        reseller.push_token && reseller.fcm_token && reseller.notifications_enabled
-      );
-      console.log(`🔍 Reseller push token exists: ${hasToken}`);
-      return hasToken;
-    }
-
-    const { data: resellerStore } = await supabase
-      .from("resellers")
-      .select("id")
-      .eq("store_name", storeSlug)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (resellerStore) {
-      const { data: customer } = await supabase
-        .from("reseller_customers")
-        .select("push_token, fcm_token, notifications_enabled")
-        .eq("auth_user_id", userId)
-        .eq("reseller_id", resellerStore.id)
-        .maybeSingle();
-
-      if (customer) {
-        const hasToken = !!(
-          customer.push_token &&
-          customer.fcm_token &&
-          customer.notifications_enabled
-        );
-        console.log(`🔍 Customer push token exists: ${hasToken}`);
-        return hasToken;
-      }
-    }
-
-    console.log("🔍 No push token found for user");
-    return false;
+    const data = await callStoreFunction<{ enabled: boolean }>(
+      "global-store-notifications-settings",
+      { action: "status" },
+    );
+    return !!data.enabled;
   } catch (error) {
     console.error("Error checking push token:", error);
     return false;
@@ -179,71 +141,17 @@ async function hasExistingPushToken(userId: string): Promise<boolean> {
 // ============================================
 // Save Push Token to Database
 // ============================================
-async function savePushTokenToDatabase(
-  tokens: { expoToken: string; fcmToken: string | null },
-  userId: string,
-) {
+async function savePushTokenToDatabase(tokens: {
+  expoToken: string;
+  fcmToken: string | null;
+}) {
   try {
-    const storeSlug = useResellerStore.getState().config.storeName;
-    console.log("💾 Saving push token to database for user:", userId);
-
-    const { data: reseller } = await supabase
-      .from("resellers")
-      .select("id")
-      .eq("auth_user_id", userId)
-      .maybeSingle();
-
-    if (reseller) {
-      const { error } = await supabase
-        .from("resellers")
-        .update({
-          push_token: tokens.expoToken,
-          fcm_token: tokens.fcmToken,
-          notifications_enabled: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", reseller.id);
-
-      if (!error) {
-        console.log("✅ Push token saved for reseller");
-        return true;
-      }
-    }
-
-    const { data: resellerStore } = await supabase
-      .from("resellers")
-      .select("id")
-      .eq("store_name", storeSlug)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (resellerStore) {
-      const { data: customer } = await supabase
-        .from("reseller_customers")
-        .select("id")
-        .eq("auth_user_id", userId)
-        .eq("reseller_id", resellerStore.id)
-        .maybeSingle();
-
-      if (customer) {
-        const { error } = await supabase
-          .from("reseller_customers")
-          .update({
-            push_token: tokens.expoToken,
-            fcm_token: tokens.fcmToken,
-            notifications_enabled: true,
-          })
-          .eq("id", customer.id);
-
-        if (!error) {
-          console.log("✅ Push token saved for customer");
-          return true;
-        }
-      }
-    }
-
-    console.log("⚠️ Could not save push token - no matching profile");
-    return false;
+    await callStoreFunction("global-store-notifications-settings", {
+      action: "enable",
+      expoToken: tokens.expoToken,
+      fcmToken: tokens.fcmToken,
+    });
+    return true;
   } catch (error) {
     console.error("❌ Error saving push token:", error);
     return false;
@@ -253,73 +161,19 @@ async function savePushTokenToDatabase(
 // ============================================
 // Setup Customer for Reseller
 // ============================================
-async function setupCustomerForReseller(userId: string, userEmail: string) {
+async function setupCustomerForReseller(userEmail: string) {
   try {
-    const storeSlug = useResellerStore.getState().config.storeName;
-    const username = userEmail.split("@")[0];
+    const resellerId = useResellerStore.getState().config.resellerId;
+    if (!resellerId) return;
 
-    const { data: reseller } = await supabase
-      .from("resellers")
-      .select("id, store_name")
-      .eq("store_name", storeSlug)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (!reseller) {
-      console.log("[Auth] No active reseller found for store:", storeSlug);
-      return;
-    }
-
-    const { data: existingCustomer } = await supabase
-      .from("reseller_customers")
-      .select("id, auth_user_id")
-      .eq("reseller_id", reseller.id)
-      .eq("email", userEmail)
-      .maybeSingle();
-
-    let customerId: string | null = null;
-
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
-      if (!existingCustomer.auth_user_id) {
-        await supabase
-          .from("reseller_customers")
-          .update({ auth_user_id: userId })
-          .eq("id", existingCustomer.id);
-      }
-    } else {
-      const { data: newCustomer } = await supabase
-        .from("reseller_customers")
-        .insert({
-          reseller_id: reseller.id,
-          email: userEmail,
-          first_name: username,
-          auth_user_id: userId,
-        })
-        .select("id")
-        .maybeSingle();
-
-      if (newCustomer) customerId = newCustomer.id;
-    }
-
-    if (customerId) {
-      const { data: existingWallet } = await supabase
-        .from("reseller_customer_wallets")
-        .select("id")
-        .eq("reseller_id", reseller.id)
-        .eq("customer_id", customerId)
-        .maybeSingle();
-
-      if (!existingWallet) {
-        await supabase.from("reseller_customer_wallets").insert({
-          reseller_id: reseller.id,
-          customer_id: customerId,
-          balance: 0,
-          total_spent: 0,
-        });
-        console.log("[Auth] ✅ Customer wallet created");
-      }
-    }
+    // The function matches by email OR auth_email, so passing the auth email
+    // (session.user.email) links the existing customer row rather than
+    // creating a duplicate. The store owner is skipped inside the function.
+    const data = await callStoreFunction<{ userType?: string }>(
+      "global-store-register-customer",
+      { email: userEmail, authEmail: userEmail },
+    );
+    if (data?.userType === "reseller") return;
 
     console.log("[Auth] ✅ Customer setup complete");
   } catch (error) {
@@ -377,18 +231,15 @@ function AppContent() {
         if (session?.user) {
           console.log("👤 User found:", session.user.email);
 
-          await setupCustomerForReseller(
-            session.user.id,
-            session.user.email || "",
-          );
+          await setupCustomerForReseller(session.user.email || "");
 
-          const hasToken = await hasExistingPushToken(session.user.id);
+          const hasToken = await hasExistingPushToken();
 
           if (!hasToken) {
             console.log("📱 No existing push token, registering...");
             const tokens = await registerForPushNotificationsAsync();
             if (tokens) {
-              await savePushTokenToDatabase(tokens, session.user.id);
+              await savePushTokenToDatabase(tokens);
             }
           } else {
             console.log("✅ Push token already exists - skipping registration");
@@ -416,18 +267,15 @@ function AppContent() {
       if (event === "SIGNED_IN" && session?.user) {
         console.log("👤 User signed in:", session.user.email);
 
-        await setupCustomerForReseller(
-          session.user.id,
-          session.user.email || "",
-        );
+        await setupCustomerForReseller(session.user.email || "");
 
-        const hasToken = await hasExistingPushToken(session.user.id);
+        const hasToken = await hasExistingPushToken();
 
         if (!hasToken) {
           console.log("📱 No existing push token on sign in, registering...");
           const tokens = await registerForPushNotificationsAsync();
           if (tokens) {
-            await savePushTokenToDatabase(tokens, session.user.id);
+            await savePushTokenToDatabase(tokens);
           }
         } else {
           console.log("✅ Push token already exists - skipping registration");
@@ -516,7 +364,7 @@ function AppContent() {
       .channel(`notifications:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "reseller_notifications" },
+        { event: "*", schema: "public", table: "global_notifications" },
         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
       )
       .on(
@@ -524,7 +372,7 @@ function AppContent() {
         {
           event: "*",
           schema: "public",
-          table: "reseller_customer_notifications",
+          table: "global_customer_notifications",
         },
         () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
       )

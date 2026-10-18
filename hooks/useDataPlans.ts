@@ -3,8 +3,14 @@ import { supabase } from "@/lib/supabase";
 import { useResellerStore } from "@/store/resellerStore";
 
 export interface DataPlan {
+  /** global_base_plans.id (uuid). */
   id: string;
-  plan_id: number;
+  /**
+   * global_base_plans.provider_plan_id. A string: the purchase functions
+   * look this up with .eq("provider_plan_id", providerPlanId), so it must
+   * not be coerced to a number.
+   */
+  plan_id: string;
   network: string;
   plan_type: string;
   plan_name: string;
@@ -12,75 +18,59 @@ export interface DataPlan {
   validity?: string;
 }
 
-function getStoreSlug(): string {
-  return useResellerStore.getState().config.storeName;
-}
-
+/**
+ * Customer storefront catalog, read through the global-store-catalog edge
+ * function. The function resolves the store's country from
+ * global_reseller_applications (never from us), prices plans exactly like
+ * the purchase flow, and returns only storefront fields - base cost and
+ * markup never leave the server. This replaces the legacy direct read of
+ * resellers x reseller_plan_configs x reseller_base_plans, which was
+ * Nigeria-only and required a store-name lookup.
+ *
+ * resellerId comes from the build config (see store/resellerStore.ts); the
+ * app never needs to resolve it at runtime.
+ */
 export function useDataPlansByNetwork(network: string) {
-  const storeSlug = getStoreSlug();
+  const resellerId = useResellerStore.getState().config.resellerId;
 
   return useQuery({
-    queryKey: ["store_plans", storeSlug, network],
+    queryKey: ["store_plans", resellerId, network],
     queryFn: async () => {
-      if (!network) return [];
+      if (!network || !resellerId) return [];
 
-      // Step 1: Get the reseller ID from the store name
-      const { data: reseller } = await supabase
-        .from("resellers")
-        .select("id")
-        .eq("store_name", storeSlug)
-        .eq("status", "active")
-        .single();
-
-      if (!reseller) return [];
-
-      // Step 2: Get plan configs with base plan data using !inner join
-      const { data, error } = await supabase
-        .from("reseller_plan_configs")
-        .select(
-          `
-          id,
-          markup_type,
-          markup_value,
-          plan:plan_id!inner(
-            id,
-            plan_id,
-            network,
-            plan_type,
-            plan_name,
-            amount,
-            validity
-          )
-        `,
-        )
-        .eq("reseller_id", reseller.id)
-        .eq("enabled", true)
-        .eq("plan.network", network.toUpperCase())
-        .eq("plan.is_active", true);
+      // Only "data" plans exist so far; the function returns every category
+      // when none is passed.
+      const { data, error } = await supabase.functions.invoke(
+        "global-store-catalog",
+        { body: { resellerId, category: "data" } },
+      );
 
       if (error) {
         console.error("[useDataPlansByNetwork] Error:", error);
         throw error;
       }
 
-      // Step 3: Calculate final prices and sort manually
-      const plans = (data || []).map((rp: any) => ({
-        id: rp.plan.id,
-        plan_id: rp.plan.plan_id,
-        network: rp.plan.network,
-        plan_type: rp.plan.plan_type,
-        plan_name: rp.plan.plan_name,
-        validity: rp.plan.validity,
-        price:
-          rp.markup_type === "percentage"
-            ? Math.round(rp.plan.amount * (1 + rp.markup_value / 100))
-            : Math.round(rp.plan.amount + rp.markup_value),
-      }));
+      const target = network.toUpperCase();
+      const plans: DataPlan[] = (data?.plans ?? [])
+        .filter(
+          (p: any) =>
+            (p.network ?? "").toUpperCase() === target ||
+            (p.category ?? "").toUpperCase() === target,
+        )
+        .map((p: any) => ({
+          id: p.id,
+          plan_id: p.plan_id,
+          network: p.network ?? "",
+          plan_type: p.category ?? "",
+          plan_name: p.name,
+          validity: p.validity,
+          price: p.price,
+        }));
 
-      // Sort by price ascending
+      // Sort by price ascending, as the legacy read did.
       return plans.sort((a, b) => a.price - b.price);
     },
-    enabled: !!network,
+    enabled: !!network && !!resellerId,
     staleTime: 1000 * 60 * 5,
   });
 }

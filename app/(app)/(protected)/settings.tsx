@@ -1,12 +1,13 @@
 // app/(app)/(protected)/settings.tsx
 import { Card, Input } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getCountryConfig } from "@/constants/countryConfig";
 import { useNotificationSettings } from "@/hooks/useNotificationSetings";
 import { useProfile } from "@/hooks/useProfiles";
 import { useTheme } from "@/hooks/useTheme";
-import { useTransactionPin } from "@/hooks/useTransactionPin";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth.store";
+import { useResellerStore } from "@/store/resellerStore";
 import { useThemeStore } from "@/store/themeStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -54,8 +55,6 @@ export default function SettingsScreen() {
 
   // Fetch real profile data from Supabase
   const { data: profile, isLoading: isProfileLoading } = useProfile();
-  // ✅ ADD THIS HOOK
-  const { validatePin } = useTransactionPin();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -68,11 +67,16 @@ export default function SettingsScreen() {
   const [pinInput, setPinInput] = useState("");
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
+  // Country-aware date formatting (8.b) - locale from the store's country.
+  const country = getCountryConfig(
+    useResellerStore.getState().config.countryCode,
+  );
+
   // Get member since date from profile or use current date
   const getMemberSinceDate = () => {
     if (profile?.created_at) {
       const date = new Date(profile.created_at);
-      return date.toLocaleDateString("en-NG", {
+      return date.toLocaleDateString(country.locale, {
         year: "numeric",
         month: "long",
       });
@@ -169,7 +173,7 @@ export default function SettingsScreen() {
     // Check if user has transaction PIN
     // const hasPin = !!profile?.transaction_pin;
 
-    if (profile?.transaction_pin) {
+    if (profile?.has_transaction_pin) {
       // If user has PIN, show modal for PIN input
       setShowPinModal(true);
       setPinInput("");
@@ -182,16 +186,10 @@ export default function SettingsScreen() {
 
   // Handle PIN modal submission
   const handlePinSubmit = async () => {
+    // PIN verification happens server-side during deletion; this only
+    // confirms the user typed four digits.
     if (!pinInput || pinInput.length !== 4) {
       Alert.alert("Error", "Please enter a valid 4-digit PIN");
-      return;
-    }
-
-    // ✅ Use the hook's validatePin method instead of manual comparison
-    if (!validatePin(pinInput, profile?.transaction_pin)) {
-      Alert.alert("Error", "Invalid transaction PIN");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setPinInput("");
       return;
     }
 

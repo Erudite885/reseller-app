@@ -7,12 +7,18 @@ import {
   getNetworkColorLight,
   getNetworkImage,
   NETWORK_PREFIXES,
-  quickAmounts,
 } from "@/constants/helpers";
+import {
+  getCountryConfig,
+  getQuickAmounts,
+} from "@/constants/countryConfig";
 import { useDataPlansByNetwork } from "@/hooks/useDataPlans";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
-import { usePurchaseAirtime, usePurchaseData } from "@/hooks/usePurchaseVTU";
+import {
+  usePurchaseAirtime,
+  usePurchaseData,
+} from "@/hooks/usePurchaseVTU";
 import { useTheme } from "@/hooks/useTheme";
 import { useTransactionPin } from "@/hooks/useTransactionPin";
 import {
@@ -20,6 +26,7 @@ import {
   useVirtualAccounts,
 } from "@/hooks/useVirtualAccounts";
 import { useWallet } from "@/hooks/useWallet";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -41,7 +48,13 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: profile, isLoading: isProfileLoading } = useProfile();
-  const { validatePin, createPin } = useTransactionPin();
+  const { createPin } = useTransactionPin();
+
+  // Country-aware presentation (8.b): currency/locale/quick amounts come from
+  // the store's country config, not a hardcoded NGN/naira.
+  const countryCode = useResellerStore.getState().config.countryCode;
+  const country = getCountryConfig(countryCode);
+  const quickAmounts = getQuickAmounts(country);
 
   const {
     data: wallet,
@@ -60,7 +73,7 @@ export default function HomeScreen() {
   // Service Selection State
   const [serviceType, setServiceType] = useState<"data" | "airtime">("data");
   const [network, setNetwork] = useState("");
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -187,7 +200,7 @@ export default function HomeScreen() {
 
     if (wallet.balance < purchaseAmount) {
       showToast(
-        `Insufficient balance. You need ₦${purchaseAmount.toFixed(2)} but have ₦${wallet.balance.toFixed(2)}`,
+        `Insufficient balance. You need ${formatCurrency(purchaseAmount)} but have ${formatCurrency(wallet.balance)}`,
         "error",
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -199,19 +212,12 @@ export default function HomeScreen() {
       return;
     }
 
-    if (profile?.transaction_pin) {
-      if (!validatePin(transactionPin, profile.transaction_pin)) {
-        showToast("❌ Invalid transaction PIN. Please try again.", "error");
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setTransactionPin("");
-        return;
-      }
-    } else {
+    // A first-time purchase creates the PIN. An existing PIN is verified
+    // server-side by the purchase function (the PIN value never reaches the
+    // client), which returns "Invalid transaction PIN" on a mismatch.
+    if (!profile.has_transaction_pin) {
       try {
-        await createPin({
-          newPin: transactionPin,
-          profileId: profile.id,
-        });
+        await createPin({ newPin: transactionPin });
         showToast("🎉 Transaction PIN created successfully!", "success");
         await new Promise((resolve) => setTimeout(resolve, 800));
       } catch (error: any) {
@@ -260,7 +266,6 @@ export default function HomeScreen() {
         }
       } else {
         const result = await purchaseAirtimeMutation.mutateAsync({
-          network: network,
           phoneNumber: phoneNumber,
           amount: purchaseAmount,
           transactionPin: transactionPin,
@@ -268,7 +273,7 @@ export default function HomeScreen() {
 
         if (result.success) {
           showToast(
-            `₦${purchaseAmount.toFixed(2)} airtime purchased successfully for ${phoneNumber}!`,
+            `${formatCurrency(purchaseAmount)} airtime purchased successfully for ${phoneNumber}!`,
             "success",
           );
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -300,9 +305,9 @@ export default function HomeScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-NG", {
+    return new Intl.NumberFormat(country.locale, {
       style: "currency",
-      currency: "NGN",
+      currency: country.currency,
       minimumFractionDigits: 2,
     }).format(amount);
   };
@@ -465,7 +470,7 @@ export default function HomeScreen() {
                 >
                   {showBalance
                     ? formatCurrency(wallet?.balance || 0)
-                    : "₦••••••"}
+                    : `${country.currencySymbol}••••••`}
                 </Text>
               )}
               <Pressable
@@ -1001,7 +1006,7 @@ export default function HomeScreen() {
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
-                leftIcon={<Text>₦</Text>}
+                leftIcon={<Text>{country.currencySymbol}</Text>}
               />
             </View>
 
@@ -1052,7 +1057,8 @@ export default function HomeScreen() {
                         color: amount === amt ? colors.primary : colors.text,
                       }}
                     >
-                      ₦{amt}
+                      {country.currencySymbol}
+                      {amt}
                     </Text>
                   </Pressable>
                 ))}
@@ -1068,7 +1074,7 @@ export default function HomeScreen() {
           {serviceType && (
             <Input
               label={
-                profile?.transaction_pin
+                profile?.has_transaction_pin
                   ? "Enter Transaction PIN"
                   : "Create Transaction PIN"
               }

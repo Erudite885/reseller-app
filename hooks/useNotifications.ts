@@ -1,9 +1,15 @@
 // hooks/useNotifications.ts
+//
+// Task 8, branch 8.c.iii. The caller's notifications through the
+// global-store-notifications edge function (global_notifications for a
+// reseller, global_customer_notifications for a customer). Replaces the
+// legacy direct reads/writes of reseller_notifications /
+// reseller_customer_notifications, which were Nigeria-only.
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
+import { callStoreFunction } from "@/lib/storeApi";
 
 export interface DatabaseNotification {
   id: string;
@@ -27,64 +33,6 @@ export interface DisplayNotification {
   createdAt: string;
 }
 
-function getStoreSlug(): string {
-  return useResellerStore.getState().config.storeName;
-}
-
-async function getNotificationTable(
-  userId: string,
-): Promise<{
-  table: string;
-  filterColumn: string;
-  filterValue: string;
-} | null> {
-  const storeSlug = getStoreSlug();
-
-  // Get reseller
-  const { data: resellerStore } = await supabase
-    .from("resellers")
-    .select("id")
-    .eq("store_name", storeSlug)
-    .eq("status", "active")
-    .single();
-
-  if (!resellerStore) return null;
-
-  // Check if user is the reseller
-  const { data: reseller } = await supabase
-    .from("resellers")
-    .select("id")
-    .eq("auth_user_id", userId)
-    .eq("id", resellerStore.id)
-    .single();
-
-  if (reseller) {
-    return {
-      table: "reseller_notifications",
-      filterColumn: "reseller_id",
-      filterValue: reseller.id,
-    };
-  }
-
-  // Check if user is a customer
-  const { data: customer } = await supabase
-    .from("reseller_customers")
-    .select("id")
-    .eq("auth_user_id", userId)
-    .eq("reseller_id", resellerStore.id)
-    .single();
-
-  if (customer) {
-    return {
-      table: "reseller_customer_notifications",
-      filterColumn: "customer_id",
-      filterValue: customer.id,
-    };
-  }
-
-  return null;
-}
-
 const mapNotificationType = (
   type: string,
 ): "success" | "info" | "warning" | "promo" => {
@@ -102,8 +50,7 @@ const mapNotificationType = (
 };
 
 const formatTimeAgo = (date: Date): string => {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = Date.now() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
@@ -149,11 +96,9 @@ const convertToDisplayNotification = (
       actionLabel = "View";
       actionRoute = "/(app)/(protected)";
       break;
-    case "system":
-      title = dbNotif.metadata?.title || "🔔 System Notice";
-      break;
     default:
-      title = "🔔 Notification";
+      title = dbNotif.metadata?.title || "🔔 Notification";
+      break;
   }
 
   return {
@@ -171,141 +116,89 @@ const convertToDisplayNotification = (
 };
 
 export function useNotifications() {
-  const { user } = useAuthStore();
-  const storeSlug = getStoreSlug();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const resellerId = useResellerStore.getState().config.resellerId;
+  const queryKey = ["notifications", resellerId, user?.id];
 
-  const {
-    data: notifications = [],
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ["notifications", storeSlug, user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      const notifConfig = await getNotificationTable(user.id);
-      if (!notifConfig) return [];
-
-      const { data, error } = await supabase
-        .from(notifConfig.table)
-        .select("*")
-        .eq(notifConfig.filterColumn, notifConfig.filterValue)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []).map(convertToDisplayNotification);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey,
+    queryFn: async (): Promise<DisplayNotification[]> => {
+      if (!user?.id) throw new Error("No user");
+      const data = await callStoreFunction<{ notifications: DatabaseNotification[] }>(
+        "global-store-notifications",
+        { action: "list" },
+      );
+      return (data.notifications ?? []).map(convertToDisplayNotification);
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !!resellerId,
+    staleTime: 1000 * 60,
   });
 
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const notifConfig = await getNotificationTable(user!.id);
-      if (!notifConfig) return;
-
-      const { error } = await supabase
-        .from(notifConfig.table)
-        .update({ is_read: true })
-        .eq("id", id);
-      if (error) throw error;
+      await callStoreFunction("global-store-notifications", {
+        action: "mark_read",
+        id,
+      });
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({
-        queryKey: ["notifications", storeSlug, user?.id],
-      });
-      const previous = queryClient.getQueryData([
-        "notifications",
-        storeSlug,
-        user?.id,
-      ]);
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        (old: DisplayNotification[]) =>
-          old?.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old: DisplayNotification[] | undefined) =>
+        old?.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
       );
       return { previous };
     },
     onError: (_err, _id, context) => {
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        context?.previous,
-      );
+      queryClient.setQueryData(queryKey, context?.previous);
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      const notifConfig = await getNotificationTable(user!.id);
-      if (!notifConfig) return;
-
-      const { error } = await supabase
-        .from(notifConfig.table)
-        .update({ is_read: true })
-        .eq(notifConfig.filterColumn, notifConfig.filterValue)
-        .eq("is_read", false);
-      if (error) throw error;
+      await callStoreFunction("global-store-notifications", {
+        action: "mark_all_read",
+      });
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({
-        queryKey: ["notifications", storeSlug, user?.id],
-      });
-      const previous = queryClient.getQueryData([
-        "notifications",
-        storeSlug,
-        user?.id,
-      ]);
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        (old: DisplayNotification[]) =>
-          old?.map((n) => ({ ...n, isRead: true })),
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old: DisplayNotification[] | undefined) =>
+        old?.map((n) => ({ ...n, isRead: true })),
       );
       return { previous };
     },
     onError: (_err, _vars, context) => {
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        context?.previous,
-      );
+      queryClient.setQueryData(queryKey, context?.previous);
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const deleteNotificationMutation = useMutation({
     mutationFn: async (id: string) => {
-      const notifConfig = await getNotificationTable(user!.id);
-      if (!notifConfig) return;
-
-      const { error } = await supabase
-        .from(notifConfig.table)
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      await callStoreFunction("global-store-notifications", {
+        action: "delete",
+        id,
+      });
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({
-        queryKey: ["notifications", storeSlug, user?.id],
-      });
-      const previous = queryClient.getQueryData([
-        "notifications",
-        storeSlug,
-        user?.id,
-      ]);
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        (old: DisplayNotification[]) => old?.filter((n) => n.id !== id),
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData(queryKey);
+      queryClient.setQueryData(queryKey, (old: DisplayNotification[] | undefined) =>
+        old?.filter((n) => n.id !== id),
       );
       return { previous };
     },
     onError: (_err, _id, context) => {
-      queryClient.setQueryData(
-        ["notifications", storeSlug, user?.id],
-        context?.previous,
-      );
+      queryClient.setQueryData(queryKey, context?.previous);
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   return {
-    notifications,
+    notifications: data ?? [],
     isLoading,
     refetch,
     markAsRead: markAsReadMutation.mutate,
