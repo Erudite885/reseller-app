@@ -29,14 +29,21 @@ export interface DataPlan {
  *
  * resellerId comes from the build config (see store/resellerStore.ts); the
  * app never needs to resolve it at runtime.
+ *
+ * Returns every plan for the store plus the store's own `networks` list.
+ * That list is what the customer picks from in countries with no prefix
+ * table (see constants/helpers.ts); Nigeria still auto-detects from the
+ * phone number.
  */
-export function useDataPlansByNetwork(network: string) {
+export function useStoreCatalog() {
   const resellerId = useResellerStore.getState().config.resellerId;
 
   return useQuery({
-    queryKey: ["store_plans", resellerId, network],
+    queryKey: ["store_catalog", resellerId],
     queryFn: async () => {
-      if (!network || !resellerId) return [];
+      if (!resellerId) {
+        return { plans: [] as DataPlan[], networks: [] as string[] };
+      }
 
       // Only "data" plans exist so far; the function returns every category
       // when none is passed.
@@ -46,31 +53,42 @@ export function useDataPlansByNetwork(network: string) {
       );
 
       if (error) {
-        console.error("[useDataPlansByNetwork] Error:", error);
+        console.error("[useStoreCatalog] Error:", error);
         throw error;
       }
 
-      const target = network.toUpperCase();
-      const plans: DataPlan[] = (data?.plans ?? [])
-        .filter(
-          (p: any) =>
-            (p.network ?? "").toUpperCase() === target ||
-            (p.category ?? "").toUpperCase() === target,
-        )
-        .map((p: any) => ({
-          id: p.id,
-          plan_id: p.plan_id,
-          network: p.network ?? "",
-          plan_type: p.category ?? "",
-          plan_name: p.name,
-          validity: p.validity,
-          price: p.price,
-        }));
+      const plans: DataPlan[] = (data?.plans ?? []).map((p: any) => ({
+        id: p.id,
+        plan_id: p.plan_id,
+        network: p.network ?? "",
+        plan_type: p.category ?? "",
+        plan_name: p.name,
+        validity: p.validity,
+        price: p.price,
+      }));
 
       // Sort by price ascending, as the legacy read did.
-      return plans.sort((a, b) => a.price - b.price);
+      plans.sort((a, b) => a.price - b.price);
+
+      return {
+        plans,
+        networks: (data?.networks ?? []) as string[],
+      };
     },
-    enabled: !!network && !!resellerId,
+    enabled: !!resellerId,
     staleTime: 1000 * 60 * 5,
   });
+}
+
+export function useDataPlansByNetwork(network: string) {
+  const { data, isLoading, refetch } = useStoreCatalog();
+
+  const target = network.toUpperCase();
+  const plans = (data?.plans ?? []).filter(
+    (p) =>
+      (p.network ?? "").toUpperCase() === target ||
+      (p.plan_type ?? "").toUpperCase() === target,
+  );
+
+  return { data: plans, isLoading, refetch };
 }

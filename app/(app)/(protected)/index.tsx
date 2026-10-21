@@ -4,15 +4,16 @@ import { PlanCarousel } from "@/components/PlanCarousel";
 import { Button, Card, Input, Toast } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import {
+  detectNetwork,
   getNetworkColorLight,
   getNetworkImage,
-  NETWORK_PREFIXES,
+  getNetworkPrefixes,
 } from "@/constants/helpers";
 import {
   getCountryConfig,
   getQuickAmounts,
 } from "@/constants/countryConfig";
-import { useDataPlansByNetwork } from "@/hooks/useDataPlans";
+import { useDataPlansByNetwork, useStoreCatalog } from "@/hooks/useDataPlans";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
 import {
@@ -92,32 +93,31 @@ export default function HomeScreen() {
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
     useDataPlansByNetwork(network);
 
+  // The store's own networks, for countries with no prefix table. Nigeria
+  // auto-detects from the phone number instead, so this stays unused there.
+  const { data: storeCatalog } = useStoreCatalog();
+  const storeNetworks = storeCatalog?.networks ?? [];
+
   // Purchase hooks
   const purchaseDataMutation = usePurchaseData();
   const purchaseAirtimeMutation = usePurchaseAirtime();
 
-  // Auto-detect network from phone number
+  // Auto-detect network from phone number, but only where a prefix table
+  // exists (Nigeria today). Other countries pick from countryConfig.telecoms.
+  const networkPrefixes = getNetworkPrefixes(countryCode);
+
   useEffect(() => {
+    if (!networkPrefixes) {
+      return;
+    }
     if (phoneNumber.length >= 4) {
-      let detected = false;
+      const detectedNetwork = detectNetwork(phoneNumber, countryCode);
 
-      for (const [networkKey, prefixes] of Object.entries(NETWORK_PREFIXES)) {
-        for (const prefix of prefixes) {
-          if (
-            phoneNumber.startsWith(prefix) &&
-            phoneNumber.length >= prefix.length
-          ) {
-            setNetwork(networkKey.toUpperCase());
-            setSelectedPlanId(null);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            detected = true;
-            break;
-          }
-        }
-        if (detected) break;
-      }
-
-      if (!detected) {
+      if (detectedNetwork) {
+        setNetwork(detectedNetwork);
+        setSelectedPlanId(null);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
         setNetwork("");
         setSelectedPlanId(null);
       }
@@ -125,11 +125,11 @@ export default function HomeScreen() {
       setNetwork("");
       setSelectedPlanId(null);
     }
-  }, [phoneNumber]);
+  }, [phoneNumber, networkPrefixes, countryCode]);
 
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "");
-    const limited = cleaned.substring(0, 11);
+    const limited = cleaned.substring(0, country.phoneNumber.maxDigits);
     setPhoneNumber(limited);
   };
 
@@ -187,6 +187,19 @@ export default function HomeScreen() {
   const handlePurchase = async () => {
     if (!wallet) {
       showToast("Unable to load wallet balance. Please try again.", "error");
+      return;
+    }
+
+    // countryConfig.phoneNumber is the source of truth for a valid local
+    // number length (the input is capped at maxDigits as it is typed).
+    if (
+      phoneNumber.length < country.phoneNumber.minDigits ||
+      phoneNumber.length > country.phoneNumber.maxDigits
+    ) {
+      showToast(
+        `Enter a valid ${country.name} phone number (${country.phoneNumber.minDigits} digits).`,
+        "error",
+      );
       return;
     }
 
@@ -967,6 +980,55 @@ export default function HomeScreen() {
                   </View>
                 )}
               </>
+            ) : storeNetworks.length > 0 ? (
+              <View style={{ paddingHorizontal: Spacing.md }}>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                    marginBottom: Spacing.sm,
+                    paddingHorizontal: Spacing.xs,
+                  }}
+                >
+                  Select network
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: Spacing.sm,
+                  }}
+                >
+                  {storeNetworks.map((net) => (
+                    <Pressable
+                      key={net}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setNetwork(net.toUpperCase());
+                        setSelectedPlanId(null);
+                      }}
+                      style={{
+                        backgroundColor: colors.card,
+                        paddingVertical: Spacing.sm,
+                        paddingHorizontal: Spacing.lg,
+                        borderRadius: Radius.md,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: Typography.sizes.base,
+                          fontWeight: Typography.weights.semibold,
+                          color: colors.text,
+                        }}
+                      >
+                        {net}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             ) : (
               <View
                 style={{

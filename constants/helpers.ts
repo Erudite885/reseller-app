@@ -21,9 +21,15 @@ export const getNetworkImage = (networkKey: string) => {
   );
 };
 
-// Network prefix mapping for auto-detection
-export const NETWORK_PREFIXES: { [key: string]: string[] } = {
-  mtn: [
+// Network prefix auto-detection, per country. Prefix tables are only
+// published for Nigeria; the other countries in countryConfig have no prefix
+// data, so their storefronts let the customer pick the network from
+// countryConfig.telecoms instead of guessing from the number.
+export const NETWORK_PREFIXES_BY_COUNTRY: {
+  [countryCode: string]: { [networkKey: string]: string[] };
+} = {
+  ng: {
+    mtn: [
     "07025",
     "07026",
     "0703",
@@ -54,9 +60,39 @@ export const NETWORK_PREFIXES: { [key: string]: string[] } = {
     "0912",
     "0911",
   ],
-  glo: ["0805", "0807", "0705", "0815", "0811", "0905", "0915"],
-  "9mobile": ["0809", "0817", "0818", "0908", "0909"],
+    glo: ["0805", "0807", "0705", "0815", "0811", "0905", "0915"],
+    "9mobile": ["0809", "0817", "0818", "0908", "0909"],
+  },
 };
+
+/** Prefixes for one country, or null when that country has no prefix table. */
+export function getNetworkPrefixes(
+  countryCode: string | undefined,
+): { [networkKey: string]: string[] } | null {
+  return NETWORK_PREFIXES_BY_COUNTRY[(countryCode || "").toLowerCase()] || null;
+}
+
+/**
+ * Detect a network from a local phone number. Returns null for a country
+ * with no prefix table, or when no prefix matches - the caller then shows a
+ * manual picker rather than guessing.
+ */
+export function detectNetwork(
+  phoneNumber: string,
+  countryCode: string | undefined,
+): string | null {
+  const prefixes = getNetworkPrefixes(countryCode);
+  if (!prefixes) return null;
+
+  for (const [networkKey, list] of Object.entries(prefixes)) {
+    for (const prefix of list) {
+      if (phoneNumber.startsWith(prefix) && phoneNumber.length >= prefix.length) {
+        return networkKey.toUpperCase();
+      }
+    }
+  }
+  return null;
+}
 
 // Mock create action - replace with actual API call
 export const createVirtualAccountAction = async (formData: any) => {
