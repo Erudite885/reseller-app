@@ -304,12 +304,16 @@ export default function HomeScreen() {
     }
   };
 
+  // Symbol-only, matching the web storefront's formatStorePrice. Intl's
+  // currency style on Hermes has no full ICU, so it prints the ISO code
+  // alongside the symbol for most currencies ("GH₵50.00", "KSh 50.00") -
+  // the reported "country code + symbol" defect. Format the number with the
+  // country locale and prefix the country's own symbol instead.
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(country.locale, {
-      style: "currency",
-      currency: country.currency,
+    return `${country.currencySymbol}${amount.toLocaleString(country.locale, {
       minimumFractionDigits: 2,
-    }).format(amount);
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   return (
