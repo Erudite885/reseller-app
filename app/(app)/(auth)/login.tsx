@@ -65,43 +65,35 @@ export function getAssetSource(assetPath: string | undefined): any {
 }
 
 // ============================================
-// Helper function to call the edge function
+// Resolve the store's derived auth email
 // ============================================
+// The per-store suffix is internal: the customer signs in with the address
+// they registered with. The function maps it to the Supabase Auth identity
+// behind it (service-role only, so it runs server-side). Invoked through the
+// configured client rather than a hand-built fetch, so it reuses the app's
+// Supabase URL and publishable key.
 async function getCustomerAuthEmail(
   originalEmail: string,
   resellerId: string,
 ): Promise<string | null> {
   try {
-    const supabaseUrl = process.env.EXPO_PUBLIC_BIMBO_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.error("[Edge Function] SUPABASE_URL not configured");
-      return null;
-    }
-
-    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/global-store-customer-auth-email`;
-    const supabaseAnonKey = process.env.EXPO_PUBLIC_BIMBO_SUPABASE_ANON_KEY;
-
-    const response = await fetch(edgeFunctionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Required: Supabase edge functions reject requests without a valid anon key
-        ...(supabaseAnonKey && { Authorization: `Bearer ${supabaseAnonKey}` }),
+    const { data, error } = await supabase.functions.invoke(
+      "global-store-customer-auth-email",
+      {
+        body: {
+          resellerId,
+          email: originalEmail.trim().toLowerCase(),
+        },
       },
-      body: JSON.stringify({
-        resellerId,
-        email: originalEmail.trim().toLowerCase(),
-      }),
-    });
+    );
 
-    const data = await response.json();
-    if (data.error) {
-      console.error("[Edge Function] Error:", data.error);
+    if (error) {
+      console.error("[Login] auth-email lookup failed:", error);
       return null;
     }
-    return data.authEmail || null;
+    return data?.authEmail || null;
   } catch (error) {
-    console.error("[Edge Function] Network error:", error);
+    console.error("[Login] auth-email lookup network error:", error);
     return null;
   }
 }
@@ -133,44 +125,29 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const storeSlug = useResellerStore.getState().config.storeName;
       const resellerId = useResellerStore.getState().config.resellerId;
-      let loginEmail = email.trim().toLowerCase();
-      let loginMethod = "direct";
 
-      // STEP 1: Try to get auth_email from the edge function
+      // The per-store suffix on the stored auth email is internal only: the
+      // customer always types the address they registered with. Resolve it
+      // to the Supabase Auth identity behind it, and fall back to the typed
+      // address for accounts whose auth email is the real one (store
+      // owners, and customers registered before the suffix existed). This
+      // mirrors the web storefront's sign-in exactly.
+      //
+      // Deliberately no client-side reconstruction of the derived email:
+      // web signup uses a random suffix and mobile a deterministic one, so a
+      // guess is wrong for anyone who registered on the other platform, and
+      // a wrong guess surfaces as a misleading "invalid credentials".
       const authEmail = resellerId
         ? await getCustomerAuthEmail(email, resellerId)
         : null;
+      const loginEmail = authEmail || email.trim().toLowerCase();
 
-      if (authEmail) {
-        // Customer found - use their stored auth email for login
-        loginEmail = authEmail;
-        loginMethod = "edge_function";
-      } else {
-        // STEP 2: No stored auth_email - reconstruct the derived store email
-        // from the same deterministic scheme registration uses. The legacy
-        // direct-Supabase fallback is gone: the app cannot read
-        // global_customers (service-role only), so reconstruction is the
-        // only remaining path.
-        const [rawLocal, domain] = email.trim().toLowerCase().split("@");
-        const input = `${email.trim().toLowerCase()}:${storeSlug}`;
-        let hash = 0;
-        for (let i = 0; i < input.length; i++) {
-          hash = (Math.imul(31, hash) + input.charCodeAt(i)) | 0;
-        }
-        const suffix = (Math.abs(hash) % 9) + 1;
-        const separator = rawLocal.includes("+") ? "" : "+";
-        loginEmail = `${rawLocal}${separator}${storeSlug}${suffix}@${domain}`;
-        loginMethod = "reconstructed";
-      }
-
-      // STEP 3: Attempt login with the determined email
       console.log(
         "[Login] Attempting login with:",
         loginEmail,
-        "Method:",
-        loginMethod,
+        "resolved:",
+        Boolean(authEmail),
       );
 
       const {
