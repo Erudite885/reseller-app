@@ -1,12 +1,14 @@
 // app/(app)/(protected)/wallet.tsx
 import { Button, Card } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getCountryConfig } from "@/constants/countryConfig";
 import { useProfile } from "@/hooks/useProfiles";
 import { useTheme } from "@/hooks/useTheme";
 import {
   useCreateVirtualAccount,
   useVirtualAccounts,
 } from "@/hooks/useVirtualAccounts";
+import { useResellerStore } from "@/store/resellerStore";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -25,6 +27,16 @@ import {
 export default function WalletScreen() {
   const { colors, shadows } = useTheme();
   const router = useRouter();
+
+  // Funding is country-scoped: only Nigeria's gateway (xixapay) issues
+  // virtual accounts. Every other country funds by mobile money / bank
+  // transfer, which the customer storefront does not implement yet on
+  // either platform. The web storefront shows the same contact-support
+  // fallback for those countries (StoreFundWalletModal), so this screen
+  // mirrors it instead of offering a virtual account that cannot be created.
+  const countryCode = useResellerStore.getState().config.countryCode;
+  const country = getCountryConfig(countryCode);
+  const isVirtualAccountCountry = country.paymentGateway.provider === "xixapay";
 
   // Fetch profile and virtual accounts
   const { data: profile, isLoading: isProfileLoading } = useProfile();
@@ -83,7 +95,86 @@ export default function WalletScreen() {
           }}
         >
           {/* Loading State */}
-          {isVirtualAccountsLoading ? (
+          {!isVirtualAccountCountry ? (
+            // MOBILE MONEY / BANK TRANSFER COUNTRY (no virtual account)
+            <View>
+              <View style={{ marginBottom: Spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.lg,
+                    fontWeight: Typography.weights.bold,
+                    color: colors.text,
+                    marginBottom: Spacing.xs,
+                  }}
+                >
+                  Add Money
+                </Text>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  Fund your wallet in {country.name}
+                </Text>
+              </View>
+
+              <Card
+                variant="elevated"
+                padding="lg"
+                style={{ marginBottom: Spacing.lg }}
+              >
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.base,
+                    fontWeight: Typography.weights.semibold,
+                    color: colors.text,
+                    marginBottom: Spacing.sm,
+                  }}
+                >
+                  {country.paymentGateway.methods.includes("mobile_money")
+                    ? "Mobile money funding"
+                    : "Bank transfer funding"}{" "}
+                  is coming soon
+                </Text>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
+                  In {country.name} your wallet is funded by{" "}
+                  {country.paymentGateway.methods.includes("mobile_money")
+                    ? "mobile money"
+                    : "bank transfer"}
+                  , not by a bank virtual account. That flow is not available in
+                  the app yet — contact the store owner to top up your wallet in
+                  the meantime.
+                </Text>
+              </Card>
+
+              <Card
+                variant="outlined"
+                padding="md"
+                style={{
+                  backgroundColor: colors.primary + "05",
+                  borderColor: colors.primary + "40",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.xs,
+                    color: colors.textSecondary,
+                    lineHeight: 18,
+                  }}
+                >
+                  🔒 Your balance is safe and unaffected. Only the way you add
+                  money differs by country.
+                </Text>
+              </Card>
+            </View>
+          ) : isVirtualAccountsLoading ? (
             <Card variant="elevated" padding="lg">
               <View
                 style={{ alignItems: "center", paddingVertical: Spacing.xl }}

@@ -89,6 +89,11 @@ export default function HomeScreen() {
 
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
 
+  // Only Nigeria's gateway issues virtual accounts; other countries fund by
+  // mobile money / bank transfer, which the storefront does not implement
+  // yet (the web modal shows the same fallback).
+  const isVirtualAccountCountry = country.paymentGateway.provider === "xixapay";
+
   // Fetch data plans for selected network
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
     useDataPlansByNetwork(network);
@@ -704,7 +709,7 @@ export default function HomeScreen() {
                       quick transfers
                     </Text>
                   </View>
-                ) : (
+                ) : isVirtualAccountCountry ? (
                   // ONE-CLICK CREATE VIRTUAL ACCOUNT - NO FORM!
                   <View>
                     <Text
@@ -744,6 +749,36 @@ export default function HomeScreen() {
                     />
 
                    
+                  </View>
+                ) : (
+                  // Mobile-money / bank-transfer country: the customer
+                  // storefront has no funding flow for these yet on either
+                  // platform (the web modal shows the same fallback).
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.base,
+                        fontWeight: Typography.weights.bold,
+                        color: colors.text,
+                        textAlign: "center",
+                        marginBottom: Spacing.xs,
+                      }}
+                    >
+                      Add Money
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.sm,
+                        color: colors.textSecondary,
+                        textAlign: "center",
+                      }}
+                    >
+                      {country.paymentGateway.methods.includes("mobile_money")
+                        ? "Mobile money"
+                        : "Bank transfer"}{" "}
+                      funding is coming soon in {country.name}. Contact the store
+                      owner to top up your wallet in the meantime.
+                    </Text>
                   </View>
                 )}
               </View>
