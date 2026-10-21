@@ -1,7 +1,8 @@
 // app/(app)/(protected)/wallet.tsx
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Input } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getCountryConfig } from "@/constants/countryConfig";
+import { useFundWallet } from "@/hooks/useFundWallet";
 import { useProfile } from "@/hooks/useProfiles";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -28,12 +29,11 @@ export default function WalletScreen() {
   const { colors, shadows } = useTheme();
   const router = useRouter();
 
-  // Funding is country-scoped: only Nigeria's gateway (xixapay) issues
-  // virtual accounts. Every other country funds by mobile money / bank
-  // transfer, which the customer storefront does not implement yet on
-  // either platform. The web storefront shows the same contact-support
-  // fallback for those countries (StoreFundWalletModal), so this screen
-  // mirrors it instead of offering a virtual account that cannot be created.
+  // Funding is country-scoped. Nigeria's gateway (xixapay) issues virtual
+  // accounts; every other country funds by mobile money through
+  // global-store-fund-wallet (korapay / flutterwave), which returns a
+  // checkout URL the customer completes in a browser. See TASK-8-BOARD.md
+  // 8.f.ii - this replaces the "coming soon" fallback 8.e.iv added.
   const countryCode = useResellerStore.getState().config.countryCode;
   const country = getCountryConfig(countryCode);
   const isVirtualAccountCountry = country.paymentGateway.provider === "xixapay";
@@ -46,12 +46,76 @@ export default function WalletScreen() {
     refetch: refetchVirtualAccounts,
   } = useVirtualAccounts();
   const createVirtualAccountMutation = useCreateVirtualAccount();
+  const fundWalletMutation = useFundWallet();
 
   // State
   const [isProcessing, setIsProcessing] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
 
   // Has virtual account
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
+
+  // Flutterwave needs the payer's MSISDN up front; korapay (checkout
+  // redirect) collects it on its own page. Mirrors the web storefront.
+  const needsMobileNumber = country.paymentGateway.provider === "flutterwave";
+
+  const handleFundWallet = async () => {
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      Alert.alert("Enter an amount", "Please enter an amount greater than 0.");
+      return;
+    }
+
+    if (needsMobileNumber) {
+      const digits = mobileNumber.replace(/\D/g, "");
+      if (
+        digits.length < country.phoneNumber.minDigits ||
+        digits.length > country.phoneNumber.maxDigits
+      ) {
+        Alert.alert(
+          "Check the number",
+          `Enter a ${country.name} mobile money number (${country.phoneNumber.minDigits}-${country.phoneNumber.maxDigits} digits).`,
+        );
+        return;
+      }
+    }
+
+    setIsProcessing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const result = await fundWalletMutation.mutateAsync({
+        amount: parsed,
+        mobileMoney: needsMobileNumber
+          ? { number: mobileNumber.replace(/\D/g, "") }
+          : undefined,
+      });
+
+      if (result?.data?.redirectUrl) {
+        // The checkout sheet has closed. The webhook completes the deposit,
+        // so the balance may land a moment later.
+        Alert.alert(
+          "Complete your payment",
+          "Finish the payment in the browser, then your wallet will be credited automatically.",
+        );
+      } else {
+        Alert.alert(
+          "Payment started",
+          "Follow the instructions from your mobile money provider. Your wallet will be credited once the payment is confirmed.",
+        );
+      }
+      setAmount("");
+    } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Funding failed",
+        error?.message || "Could not start the payment. Please try again.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleCreateAccount = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -96,7 +160,7 @@ export default function WalletScreen() {
         >
           {/* Loading State */}
           {!isVirtualAccountCountry ? (
-            // MOBILE MONEY / BANK TRANSFER COUNTRY (no virtual account)
+            // MOBILE MONEY COUNTRY (korapay / flutterwave)
             <View>
               <View style={{ marginBottom: Spacing.lg }}>
                 <Text
@@ -124,34 +188,53 @@ export default function WalletScreen() {
                 padding="lg"
                 style={{ marginBottom: Spacing.lg }}
               >
+                <Input
+                  label="Amount"
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  value={amount}
+                  onChangeText={setAmount}
+                  editable={!isProcessing}
+                />
+
+                {needsMobileNumber && (
+                  <Input
+                    label="Mobile money number"
+                    placeholder="Mobile money number"
+                    keyboardType="phone-pad"
+                    value={mobileNumber}
+                    onChangeText={setMobileNumber}
+                    editable={!isProcessing}
+                    containerStyle={{ marginTop: Spacing.lg }}
+                    helperText={`${country.phoneNumber.minDigits}-${country.phoneNumber.maxDigits} digits`}
+                  />
+                )}
+
                 <Text
                   style={{
-                    fontSize: Typography.sizes.base,
-                    fontWeight: Typography.weights.semibold,
-                    color: colors.text,
-                    marginBottom: Spacing.sm,
-                  }}
-                >
-                  {country.paymentGateway.methods.includes("mobile_money")
-                    ? "Mobile money funding"
-                    : "Bank transfer funding"}{" "}
-                  is coming soon
-                </Text>
-                <Text
-                  style={{
-                    fontSize: Typography.sizes.sm,
+                    fontSize: Typography.sizes.xs,
                     color: colors.textSecondary,
-                    lineHeight: 20,
+                    lineHeight: 18,
+                    marginTop: Spacing.md,
                   }}
                 >
-                  In {country.name} your wallet is funded by{" "}
-                  {country.paymentGateway.methods.includes("mobile_money")
-                    ? "mobile money"
-                    : "bank transfer"}
-                  , not by a bank virtual account. That flow is not available in
-                  the app yet — contact the store owner to top up your wallet in
-                  the meantime.
+                  You will be redirected to{" "}
+                  {country.paymentGateway.provider === "flutterwave"
+                    ? "Flutterwave"
+                    : "Korapay"}{" "}
+                  to complete the payment by mobile money. Your wallet is
+                  credited automatically once the payment is confirmed.
                 </Text>
+
+                <Button
+                  title={isProcessing ? "Starting payment..." : "Fund Wallet"}
+                  onPress={handleFundWallet}
+                  loading={isProcessing}
+                  disabled={isProcessing}
+                  fullWidth
+                  size="md"
+                  style={{ marginTop: Spacing.lg }}
+                />
               </Card>
 
               <Card

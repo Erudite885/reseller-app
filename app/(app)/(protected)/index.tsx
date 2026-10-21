@@ -751,9 +751,9 @@ export default function HomeScreen() {
                    
                   </View>
                 ) : (
-                  // Mobile-money / bank-transfer country: the customer
-                  // storefront has no funding flow for these yet on either
-                  // platform (the web modal shows the same fallback).
+                  // Mobile-money country (korapay / flutterwave). Funding
+                  // itself lives on the wallet screen (8.f.ii); this card
+                  // just routes there.
                   <View>
                     <Text
                       style={{
@@ -771,14 +771,23 @@ export default function HomeScreen() {
                         fontSize: Typography.sizes.sm,
                         color: colors.textSecondary,
                         textAlign: "center",
+                        marginBottom: Spacing.lg,
                       }}
                     >
+                      Fund your wallet by{" "}
                       {country.paymentGateway.methods.includes("mobile_money")
-                        ? "Mobile money"
-                        : "Bank transfer"}{" "}
-                      funding is coming soon in {country.name}. Contact the store
-                      owner to top up your wallet in the meantime.
+                        ? "mobile money"
+                        : "bank transfer"}{" "}
+                      in {country.name}
                     </Text>
+
+                    <Button
+                      title="Fund Wallet →"
+                      onPress={() => router.push("/(app)/(protected)/wallet")}
+                      variant="primary"
+                      size="md"
+                      fullWidth
+                    />
                   </View>
                 )}
               </View>
