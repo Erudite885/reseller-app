@@ -4,15 +4,16 @@ import { PlanCarousel } from "@/components/PlanCarousel";
 import { Button, Card, Input, Toast } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import {
+  detectNetwork,
   getNetworkColorLight,
   getNetworkImage,
-  NETWORK_PREFIXES,
+  getNetworkPrefixes,
 } from "@/constants/helpers";
 import {
   getCountryConfig,
   getQuickAmounts,
 } from "@/constants/countryConfig";
-import { useDataPlansByNetwork } from "@/hooks/useDataPlans";
+import { useDataPlansByNetwork, useStoreCatalog } from "@/hooks/useDataPlans";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
 import {
@@ -88,36 +89,40 @@ export default function HomeScreen() {
 
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
 
+  // Only Nigeria's gateway issues virtual accounts; other countries fund by
+  // mobile money / bank transfer, which the storefront does not implement
+  // yet (the web modal shows the same fallback).
+  const isVirtualAccountCountry = country.paymentGateway.provider === "xixapay";
+
   // Fetch data plans for selected network
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
     useDataPlansByNetwork(network);
+
+  // The store's own networks, for countries with no prefix table. Nigeria
+  // auto-detects from the phone number instead, so this stays unused there.
+  const { data: storeCatalog } = useStoreCatalog();
+  const storeNetworks = storeCatalog?.networks ?? [];
 
   // Purchase hooks
   const purchaseDataMutation = usePurchaseData();
   const purchaseAirtimeMutation = usePurchaseAirtime();
 
-  // Auto-detect network from phone number
+  // Auto-detect network from phone number, but only where a prefix table
+  // exists (Nigeria today). Other countries pick from countryConfig.telecoms.
+  const networkPrefixes = getNetworkPrefixes(countryCode);
+
   useEffect(() => {
+    if (!networkPrefixes) {
+      return;
+    }
     if (phoneNumber.length >= 4) {
-      let detected = false;
+      const detectedNetwork = detectNetwork(phoneNumber, countryCode);
 
-      for (const [networkKey, prefixes] of Object.entries(NETWORK_PREFIXES)) {
-        for (const prefix of prefixes) {
-          if (
-            phoneNumber.startsWith(prefix) &&
-            phoneNumber.length >= prefix.length
-          ) {
-            setNetwork(networkKey.toUpperCase());
-            setSelectedPlanId(null);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            detected = true;
-            break;
-          }
-        }
-        if (detected) break;
-      }
-
-      if (!detected) {
+      if (detectedNetwork) {
+        setNetwork(detectedNetwork);
+        setSelectedPlanId(null);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
         setNetwork("");
         setSelectedPlanId(null);
       }
@@ -125,11 +130,11 @@ export default function HomeScreen() {
       setNetwork("");
       setSelectedPlanId(null);
     }
-  }, [phoneNumber]);
+  }, [phoneNumber, networkPrefixes, countryCode]);
 
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "");
-    const limited = cleaned.substring(0, 11);
+    const limited = cleaned.substring(0, country.phoneNumber.maxDigits);
     setPhoneNumber(limited);
   };
 
@@ -187,6 +192,19 @@ export default function HomeScreen() {
   const handlePurchase = async () => {
     if (!wallet) {
       showToast("Unable to load wallet balance. Please try again.", "error");
+      return;
+    }
+
+    // countryConfig.phoneNumber is the source of truth for a valid local
+    // number length (the input is capped at maxDigits as it is typed).
+    if (
+      phoneNumber.length < country.phoneNumber.minDigits ||
+      phoneNumber.length > country.phoneNumber.maxDigits
+    ) {
+      showToast(
+        `Enter a valid ${country.name} phone number (${country.phoneNumber.minDigits} digits).`,
+        "error",
+      );
       return;
     }
 
@@ -304,12 +322,16 @@ export default function HomeScreen() {
     }
   };
 
+  // Symbol-only, matching the web storefront's formatStorePrice. Intl's
+  // currency style on Hermes has no full ICU, so it prints the ISO code
+  // alongside the symbol for most currencies ("GH₵50.00", "KSh 50.00") -
+  // the reported "country code + symbol" defect. Format the number with the
+  // country locale and prefix the country's own symbol instead.
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(country.locale, {
-      style: "currency",
-      currency: country.currency,
+    return `${country.currencySymbol}${amount.toLocaleString(country.locale, {
       minimumFractionDigits: 2,
-    }).format(amount);
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   return (
@@ -687,7 +709,7 @@ export default function HomeScreen() {
                       quick transfers
                     </Text>
                   </View>
-                ) : (
+                ) : isVirtualAccountCountry ? (
                   // ONE-CLICK CREATE VIRTUAL ACCOUNT - NO FORM!
                   <View>
                     <Text
@@ -727,6 +749,45 @@ export default function HomeScreen() {
                     />
 
                    
+                  </View>
+                ) : (
+                  // Mobile-money country (korapay / flutterwave). Funding
+                  // itself lives on the wallet screen (8.f.ii); this card
+                  // just routes there.
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.base,
+                        fontWeight: Typography.weights.bold,
+                        color: colors.text,
+                        textAlign: "center",
+                        marginBottom: Spacing.xs,
+                      }}
+                    >
+                      Add Money
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.sm,
+                        color: colors.textSecondary,
+                        textAlign: "center",
+                        marginBottom: Spacing.lg,
+                      }}
+                    >
+                      Fund your wallet by{" "}
+                      {country.paymentGateway.methods.includes("mobile_money")
+                        ? "mobile money"
+                        : "bank transfer"}{" "}
+                      in {country.name}
+                    </Text>
+
+                    <Button
+                      title="Fund Wallet →"
+                      onPress={() => router.push("/(app)/(protected)/wallet")}
+                      variant="primary"
+                      size="md"
+                      fullWidth
+                    />
                   </View>
                 )}
               </View>
@@ -963,6 +1024,55 @@ export default function HomeScreen() {
                   </View>
                 )}
               </>
+            ) : storeNetworks.length > 0 ? (
+              <View style={{ paddingHorizontal: Spacing.md }}>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                    marginBottom: Spacing.sm,
+                    paddingHorizontal: Spacing.xs,
+                  }}
+                >
+                  Select network
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: Spacing.sm,
+                  }}
+                >
+                  {storeNetworks.map((net) => (
+                    <Pressable
+                      key={net}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setNetwork(net.toUpperCase());
+                        setSelectedPlanId(null);
+                      }}
+                      style={{
+                        backgroundColor: colors.card,
+                        paddingVertical: Spacing.sm,
+                        paddingHorizontal: Spacing.lg,
+                        borderRadius: Radius.md,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: Typography.sizes.base,
+                          fontWeight: Typography.weights.semibold,
+                          color: colors.text,
+                        }}
+                      >
+                        {net}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             ) : (
               <View
                 style={{

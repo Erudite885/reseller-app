@@ -66,6 +66,22 @@ live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
 not per-client. Nothing to run from this repo for that task. Check the
 master log table for the latest update before starting work.
 
+**Task 8, 8.f.ii — wallet funding from the app (2026-10-17):** the app can
+now fund a wallet by mobile money in every non-Nigeria country. Nigeria is
+unchanged (xixapay virtual account). Two new files: `hooks/useFundWallet.ts`
+invokes the new `global-store-fund-wallet` edge function (web repo) with the
+caller's JWT, then opens the returned checkout URL with
+`WebBrowser.openBrowserAsync`; `wallet.tsx` replaces the "coming soon" card
+with an amount + mobile-money form (the number field appears only for
+Flutterwave), and the home wallet card now routes to the wallet screen. The
+function inserts a PENDING transaction and returns the checkout URL;
+completion is unchanged and stays on the web (the korapay/flutterwave
+webhooks credit the wallet). Mobile `tsc --noEmit` = 0.
+
+**Not yet shippable:** the function must be deployed
+(`supabase functions deploy global-store-fund-wallet --no-verify-jwt`) and a
+fresh APK built. See `TASK-8-BOARD.md` 8.f.iii in the web repo.
+
 ## Build pipeline (APK workflows) — updated 2026-10-17
 
 **Node bump — LANDED.** Both APK workflows pinned `node-version: "20"`, but

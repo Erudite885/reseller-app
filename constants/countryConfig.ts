@@ -3,10 +3,11 @@
 // Task 8, pointer 8.b.i. Country presentation config for the mobile app,
 // generated from the web's src/config/countries/*.ts (the source of truth)
 // so the app stops hardcoding Nigeria. Carries only the fields the app
-// renders with: currency/symbol, locale, phone digit bounds and the
-// per-country telecom (network) list. The flag is intentionally omitted -
-// the web's flag is a React component, which does not port to React Native;
-// flagEmoji is carried instead.
+// renders with: currency/symbol, locale, phone digit bounds, the per-country
+// telecom (network) list, and the payment gateway (which decides how the
+// wallet is funded - virtual account vs mobile money). The flag is
+// intentionally omitted - the web's flag is a React component, which does
+// not port to React Native; flagEmoji is carried instead.
 //
 // Regenerate with scripts/gen-country-config (kept in the web repo's Task 8
 // tooling) whenever the web country set changes.
@@ -25,6 +26,8 @@ export interface CountryConfig {
   phoneCode: string;
   locale: string;
   phoneNumber: { minDigits: number; maxDigits: number };
+  /** How this country's wallet is funded; NG is the only virtual-account market. */
+  paymentGateway: { provider: "xixapay" | "korapay" | "flutterwave"; methods: string[] };
   telecoms: CountryTelecom[];
 }
 
@@ -38,6 +41,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+226",
     locale: "fr-BF",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "onatel", name: "Onatel", code: "ONATEL" },
@@ -52,6 +56,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+229",
     locale: "fr-BJ",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 10, maxDigits: 10 },
     telecoms: [
       { id: "moov", name: "Moov", code: "MOOV" },
@@ -65,6 +70,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FC",
     phoneCode: "+243",
     locale: "fr-CD",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "africell", name: "Africell", code: "AFRICELL" },
@@ -79,6 +85,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+236",
     locale: "fr-CF",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "telecel", name: "Telecel", code: "TELECEL" },
@@ -91,6 +98,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+242",
     locale: "fr-CG",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "mtn", name: "MTN", code: "MTN" },
@@ -103,6 +111,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+225",
     locale: "fr-CI",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 10, maxDigits: 10 },
     telecoms: [
       { id: "moov", name: "Moov", code: "MOOV" },
@@ -117,6 +126,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+237",
     locale: "fr-CM",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "camtel", name: "Camtel", code: "CAMTEL" },
@@ -131,6 +141,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "E£",
     phoneCode: "+20",
     locale: "ar-EG",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 10, maxDigits: 10 },
     telecoms: [
       { id: "mtn", name: "MTN", code: "MTN" },
@@ -146,6 +157,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+241",
     locale: "fr-GA",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "moov", name: "Moov", code: "MOOV" },
@@ -158,6 +170,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "₵",
     phoneCode: "+233",
     locale: "en-GH",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money", "bank_transfer"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "airtel_tigo", name: "AirtelTigo", code: "AIRTEL_TIGO" },
@@ -172,6 +185,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+224",
     locale: "fr-GN",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "cellcom", name: "Cellcom", code: "CELLCOM" },
@@ -186,6 +200,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+240",
     locale: "es-GQ",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "mtn", name: "MTN", code: "MTN" },
@@ -199,6 +214,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "KSh",
     phoneCode: "+254",
     locale: "en-KE",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money", "bank_transfer"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "airtel", name: "Airtel", code: "AIRTEL" },
@@ -213,6 +229,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "DH",
     phoneCode: "+212",
     locale: "fr-MA",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "mtn", name: "MTN", code: "MTN" },
@@ -226,6 +243,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+223",
     locale: "fr-ML",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "malitel", name: "Malitel", code: "MALITEL" },
@@ -240,6 +258,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+227",
     locale: "fr-NE",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "airtel", name: "Airtel", code: "AIRTEL" },
@@ -254,6 +273,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "₦",
     phoneCode: "+234",
     locale: "en-NG",
+    paymentGateway: { provider: "xixapay", methods: ["virtual_account", "card"] },
     phoneNumber: { minDigits: 10, maxDigits: 10 },
     telecoms: [
       { id: "9mobile", name: "9MOBILE", code: "9MOBILE" },
@@ -270,6 +290,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FRw",
     phoneCode: "+250",
     locale: "en-RW",
+    paymentGateway: { provider: "flutterwave", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "airtel", name: "Airtel", code: "AIRTEL" },
@@ -283,6 +304,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+221",
     locale: "fr-SN",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "expresso", name: "Expresso", code: "EXPRESSO" },
@@ -297,6 +319,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+235",
     locale: "fr-TD",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "mtn", name: "MTN", code: "MTN" },
@@ -310,6 +333,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "CFA",
     phoneCode: "+228",
     locale: "fr-TG",
+    paymentGateway: { provider: "korapay", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 8, maxDigits: 8 },
     telecoms: [
       { id: "moov", name: "Moov", code: "MOOV" },
@@ -323,6 +347,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "USh",
     phoneCode: "+256",
     locale: "en-UG",
+    paymentGateway: { provider: "flutterwave", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "airtel", name: "Airtel", code: "AIRTEL" },
@@ -337,6 +362,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "R",
     phoneCode: "+27",
     locale: "en-ZA",
+    paymentGateway: { provider: "korapay", methods: ["bank_transfer"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "cellc", name: "CellC", code: "CELLC" },
@@ -352,6 +378,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "ZK",
     phoneCode: "+260",
     locale: "en-ZM",
+    paymentGateway: { provider: "flutterwave", methods: ["mobile_money"] },
     phoneNumber: { minDigits: 9, maxDigits: 9 },
     telecoms: [
       { id: "airtel", name: "Airtel", code: "AIRTEL" },
