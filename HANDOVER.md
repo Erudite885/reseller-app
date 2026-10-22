@@ -166,9 +166,13 @@ error, which tsc caught, then reverting); both workflow YAMLs re-parse and list
 15 steps; `expo lint` improved from 55 problems (23 errors) to 42 (12 errors)
 with no new finding in any touched file.
 
-**NOT proven:** no build has actually been dispatched since the change, so the
-`production-aab` profile is not yet shown to build in CI. That dispatch (and the
-matching dashboard half, web `e63623a`) is recorded as board item `8.h.iv`.
+**NOT proven, and the order matters:** no build has been dispatched since the
+change, so the `production-aab` profile is not yet shown to build in CI. The web
+dispatches this workflow with `ref: "main"` (`triggerAppBuild.ts`
+`BUILD_WORKFLOW_REF`), and `main` has no AAB step yet, so **PR #10 must merge
+before any dispatch** — otherwise the dispatch silently builds only an APK from
+the old workflow. After that, one real dispatch proves it. Recorded as board item
+`8.h.iv`; the matching dashboard half is web PR #35 (`e63623a`).
 
 
 ## Handoff process for patches to this repo
