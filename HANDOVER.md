@@ -153,26 +153,33 @@ A repo-wide grep for `pawn` now matches only unrelated npm packages
 
 - `eas.json` gained a `production-aab` profile (`android.buildType: "app-bundle"`,
   which maps to `:app:bundleRelease` and is the store-submission default).
-- Both `.github/workflows/build-global-reseller-apk.yml` and
-  `build-reseller-apk.yml` now run a second
-  `eas build --platform android --profile production-aab --local --output=./<store>.aab`
-  step after the APK step, with the same env; the release step attaches **both**
-  files to the one GitHub release and the success webhook posts `aabUrl`.
+- `.github/workflows/build-global-reseller-apk.yml` (the live pipeline) now runs a
+  second `eas build --platform android --profile production-aab --local
+  --output=./<store>.aab` step after the APK step, with the same env; the release
+  step attaches **both** files to the one GitHub release and the success webhook
+  posts `aabUrl`.
 - Job timeout raised 45 → 90 minutes, because each dispatch now runs two full
   Android builds.
+- The **legacy** `build-reseller-apk.yml` is deliberately left **untouched**. It
+  was originally given the same AAB treatment, on the premise that it was a live
+  pipeline; the person has since confirmed the legacy `reseller_app_configs`
+  table is not in use, and the evidence agrees (legacy workflow last run
+  **2026-10-07**, last success 2026-08-04; it posts to the legacy
+  `api/build-webhook`, which writes only that table). The change there was
+  reverted, so the legacy path is byte-identical to before this session.
 
 **Verified:** `tsc --noEmit` = 0 (sanity-checked by injecting a deliberate type
 error, which tsc caught, then reverting); both workflow YAMLs re-parse and list
 15 steps; `expo lint` improved from 55 problems (23 errors) to 42 (12 errors)
 with no new finding in any touched file.
 
-**NOT proven, and the order matters:** no build has been dispatched since the
-change, so the `production-aab` profile is not yet shown to build in CI. The web
-dispatches this workflow with `ref: "main"` (`triggerAppBuild.ts`
-`BUILD_WORKFLOW_REF`), and `main` has no AAB step yet, so **PR #10 must merge
-before any dispatch** — otherwise the dispatch silently builds only an APK from
-the old workflow. After that, one real dispatch proves it. Recorded as board item
-`8.h.iv`; the matching dashboard half is web PR #35 (`e63623a`).
+**Merged:** PR #10 → `main` `ecd3ef6` (verified: `main` carries
+`timeout-minutes: 90`, the `Build Android AAB` step, and `aabUrl` in the webhook
+payload). **NOT proven:** no build has been dispatched since the change, so the
+`production-aab` profile is not yet shown to build in CI. The dispatch is safe to
+run now — the merge-order gate is satisfied (the web dispatches at
+`ref: "main"`). Recorded as board item `8.h.iv`; the matching dashboard half is
+web PR #35 → `0b5dadc`.
 
 
 ## Handoff process for patches to this repo
