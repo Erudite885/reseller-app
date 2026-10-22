@@ -161,17 +161,22 @@ async function savePushTokenToDatabase(tokens: {
 // ============================================
 // Setup Customer for Reseller
 // ============================================
-async function setupCustomerForReseller(userEmail: string) {
+async function setupCustomerForReseller(userEmail: string, originalEmail?: string) {
   try {
     const resellerId = useResellerStore.getState().config.resellerId;
     if (!resellerId) return;
 
-    // The function matches by email OR auth_email, so passing the auth email
-    // (session.user.email) links the existing customer row rather than
-    // creating a duplicate. The store owner is skipped inside the function.
+    // `userEmail` is the session address, i.e. the derived alias Supabase
+    // Auth holds; `originalEmail` is what the person actually typed. Send
+    // them as the pair the row is keyed on (email = typed, auth_email =
+    // alias) so an existing row is matched and, when none exists, the row
+    // created here is shaped like the web's rather than a legacy
+    // email == auth_email row. The function matches on either field, and
+    // skips the store owner.
+    const email = originalEmail || userEmail;
     const data = await callStoreFunction<{ userType?: string }>(
       "global-store-register-customer",
-      { email: userEmail, authEmail: userEmail },
+      { email, authEmail: userEmail },
     );
     if (data?.userType === "reseller") return;
 
@@ -231,7 +236,10 @@ function AppContent() {
         if (session?.user) {
           console.log("👤 User found:", session.user.email);
 
-          await setupCustomerForReseller(session.user.email || "");
+          await setupCustomerForReseller(
+            session.user.email || "",
+            session.user.user_metadata?.original_email,
+          );
 
           const hasToken = await hasExistingPushToken();
 
@@ -267,7 +275,10 @@ function AppContent() {
       if (event === "SIGNED_IN" && session?.user) {
         console.log("👤 User signed in:", session.user.email);
 
-        await setupCustomerForReseller(session.user.email || "");
+        await setupCustomerForReseller(
+          session.user.email || "",
+          session.user.user_metadata?.original_email,
+        );
 
         const hasToken = await hasExistingPushToken();
 
