@@ -94,7 +94,7 @@ webhooks credit the wallet). Mobile `tsc --noEmit` = 0. The function is
 `kesh-data` APK) and the live gateway call (a person step). See
 `TASK-8-BOARD.md` in the web repo.
 
-## Build pipeline (APK workflows) — updated 2026-10-17
+## Build pipeline (APK workflows) — updated 2026-10-22 (now also builds an AAB)
 
 **Node bump — LANDED.** Both APK workflows pinned `node-version: "20"`, but
 `expo/expo-github-action@v8` with `expo-version: latest` installs a CLI whose
@@ -118,6 +118,62 @@ production with the `handover/supabase-dump` lineage. The same root cause
 explains the build-callback 404. See the master handover (`Edges_LandingPage`,
 `HANDOVER.md`) "The web has never been deployed to production" and Blocker 3 in
 `TASK-8-BOARD.md`.
+
+## Pawns module removed; AAB now built beside the APK (2026-10-22)
+
+Person instruction: the pawns (bandwidth-sharing / earnings) module is no longer
+used, so delete it, and make the build produce an **AAB alongside the APK**.
+
+**Pawns removal — DONE** (commit `c1c16be`, branch `handover/supabase-dump`):
+
+- `module/pawns/` deleted in full: the native Expo module (`PawnsModule.kt`,
+  `PawnsBootReceiver.kt`), both vendored binaries (`pawns-ndk-1.8.1.aar`,
+  `internet-sharing-1.8.1.aar`), `AndroidManifest.xml`, drawables/strings, the
+  checked-in `.gradle` state, `index.ts`, `expo-module.config.json`, `package.json`.
+- `components/EarningsConsentGate.tsx` deleted, and its gate wiring removed from
+  `app/_layout.tsx` (the `<EarningsConsentGate>` render, the `showConsentGate` /
+  `isCheckingConsent` / `isNavigatingToSettings` / `previousPathname` state, the
+  `checkConsentStatus` effect, the three consent handlers, the `isCheckingConsent`
+  early-return, and the now-unused `usePathname` / `useCallback` / `useState`
+  imports).
+- `app/(app)/(protected)/security.tsx`: the Bandwidth Sharing section
+  (`BandwidthSharingSection`), the `"bandwidth"` member of the `SecuritySection`
+  union, the `previewMode` param, and the `@/module/pawns`, `AsyncStorage`,
+  `Switch`, `ActivityIndicator`, `useRouter` imports are all gone.
+- `pawns-sdk` dropped from `package.json`; `package-lock.json` regenerated; the
+  stale `node_modules/pawns-sdk` symlink removed.
+- The `Honeygain - bandwidth sharing` line removed from both third-party lists in
+  `constants/legalTextGenerator.ts`. (The remaining `consent` strings there are
+  generic legal boilerplate, not pawns-related.)
+
+A repo-wide grep for `pawn` now matches only unrelated npm packages
+(`@expo/spawn-async`, `cross-spawn`).
+
+**AAB alongside the APK — DONE:**
+
+- `eas.json` gained a `production-aab` profile (`android.buildType: "app-bundle"`,
+  which maps to `:app:bundleRelease` and is the store-submission default).
+- Both `.github/workflows/build-global-reseller-apk.yml` and
+  `build-reseller-apk.yml` now run a second
+  `eas build --platform android --profile production-aab --local --output=./<store>.aab`
+  step after the APK step, with the same env; the release step attaches **both**
+  files to the one GitHub release and the success webhook posts `aabUrl`.
+- Job timeout raised 45 → 90 minutes, because each dispatch now runs two full
+  Android builds.
+
+**Verified:** `tsc --noEmit` = 0 (sanity-checked by injecting a deliberate type
+error, which tsc caught, then reverting); both workflow YAMLs re-parse and list
+15 steps; `expo lint` improved from 55 problems (23 errors) to 42 (12 errors)
+with no new finding in any touched file.
+
+**NOT proven, and the order matters:** no build has been dispatched since the
+change, so the `production-aab` profile is not yet shown to build in CI. The web
+dispatches this workflow with `ref: "main"` (`triggerAppBuild.ts`
+`BUILD_WORKFLOW_REF`), and `main` has no AAB step yet, so **PR #10 must merge
+before any dispatch** — otherwise the dispatch silently builds only an APK from
+the old workflow. After that, one real dispatch proves it. Recorded as board item
+`8.h.iv`; the matching dashboard half is web PR #35 (`e63623a`).
+
 
 ## Handoff process for patches to this repo
 
