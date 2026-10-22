@@ -66,6 +66,19 @@ live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
 not per-client. Nothing to run from this repo for that task. Check the
 master log table for the latest update before starting work.
 
+**Task 8, 8.g.i follow-up — customer row shape (2026-10-22):** `app/_layout.tsx`'s
+`setupCustomerForReseller` used to send the session address (the derived alias) as
+both `email` and `authEmail`, so a row it *created* was legacy-shaped
+(`email == auth_email == alias`) instead of the web's shape (`email` = the address
+typed, `authEmail` = the alias). It now takes an `originalEmail` argument and both
+call sites pass `session.user.user_metadata?.original_email` (falling back to the
+session address when the metadata is absent), mirroring the web's
+`registerCustomerToGlobalReseller`. Login already worked either way — the
+`global-store-customer-auth-email` lookup recovers the alias from Auth metadata —
+so this only aligns the row shape. Committed `31b3c6c`, merged to `main` as
+`501eff9` (PR #8). Mobile `tsc --noEmit` = 0. The app is now fully off the legacy
+`reseller*` tables (only explanatory comments remain).
+
 **Task 8, 8.f.ii — wallet funding from the app (2026-10-17):** the app can
 now fund a wallet by mobile money in every non-Nigeria country. Nigeria is
 unchanged (xixapay virtual account). Two new files: `hooks/useFundWallet.ts`
@@ -76,11 +89,10 @@ with an amount + mobile-money form (the number field appears only for
 Flutterwave), and the home wallet card now routes to the wallet screen. The
 function inserts a PENDING transaction and returns the checkout URL;
 completion is unchanged and stays on the web (the korapay/flutterwave
-webhooks credit the wallet). Mobile `tsc --noEmit` = 0.
-
-**Not yet shippable:** the function must be deployed
-(`supabase functions deploy global-store-fund-wallet --no-verify-jwt`) and a
-fresh APK built. See `TASK-8-BOARD.md` 8.f.iii in the web repo.
+webhooks credit the wallet). Mobile `tsc --noEmit` = 0. The function is
+**deployed (v5)**; what remains is a fresh APK (8.f.iii already shipped the
+`kesh-data` APK) and the live gateway call (a person step). See
+`TASK-8-BOARD.md` in the web repo.
 
 ## Build pipeline (APK workflows) — updated 2026-10-17
 
