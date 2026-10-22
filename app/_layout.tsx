@@ -8,14 +8,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
-import { useRouter, usePathname } from "expo-router";
-import {
-  EarningsConsentGate,
-  checkAndShowConsent,
-  isConsentAccepted,
-} from "@/components/EarningsConsentGate";
+import { useRouter } from "expo-router";
 import { queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
@@ -208,14 +203,7 @@ function AppContent() {
   const { isDark } = useTheme();
   const { user, setSession } = useAuthStore();
   const router = useRouter();
-  const pathname = usePathname();
   const realtimeSubscriptionRef = useRef<any>(null);
-
-  // ─── Consent Gate State ────────────────────────────────────────────────
-  const [showConsentGate, setShowConsentGate] = useState(false);
-  const [isCheckingConsent, setIsCheckingConsent] = useState(true);
-  const [isNavigatingToSettings, setIsNavigatingToSettings] = useState(false);
-  const [previousPathname, setPreviousPathname] = useState<string>("");
 
   // ─── Auth + Push Token + Customer Setup ────────────────────────────────
   useEffect(() => {
@@ -304,63 +292,6 @@ function AppContent() {
     };
   }, [setSession]);
 
-  // ─── Check Consent Status ─────────────────────────────────────────────
-  const checkConsentStatus = useCallback(async () => {
-    if (!user?.id) return;
-
-    if (isNavigatingToSettings) {
-      console.log("[ConsentGate] Skipping check - navigating to settings");
-      return;
-    }
-
-    try {
-      const accepted = await isConsentAccepted();
-      const shouldShow = await checkAndShowConsent();
-
-      console.log(
-        "[ConsentGate] Status - accepted:",
-        accepted,
-        "shouldShow:",
-        shouldShow,
-      );
-
-      if (shouldShow && !accepted) {
-        setShowConsentGate(true);
-      }
-    } catch (error) {
-      console.error("[ConsentGate] Error checking consent:", error);
-    }
-  }, [user?.id, isNavigatingToSettings]);
-
-  // ─── Check consent when user logs in ───────────────────────────────────
-  useEffect(() => {
-    async function initialize() {
-      setIsCheckingConsent(true);
-      await checkConsentStatus();
-      setIsCheckingConsent(false);
-    }
-    initialize();
-  }, [checkConsentStatus]);
-
-  // ─── Monitor path changes to detect returning from settings ───────────
-  useEffect(() => {
-    const isOnSecurityPage = pathname?.includes("security");
-
-    if (
-      isNavigatingToSettings &&
-      !isOnSecurityPage &&
-      previousPathname?.includes("security")
-    ) {
-      console.log("[ConsentGate] Returned from settings, re-checking consent");
-      setIsNavigatingToSettings(false);
-      setTimeout(() => {
-        checkConsentStatus();
-      }, 300);
-    }
-
-    setPreviousPathname(pathname || "");
-  }, [pathname, isNavigatingToSettings, checkConsentStatus, previousPathname]);
-
   // ─── Realtime Subscription for Notifications ───────────────────────────
   useEffect(() => {
     if (!user?.id) {
@@ -421,50 +352,10 @@ function AppContent() {
     };
   }, []);
 
-  // ─── Handle Open Settings from Consent Gate ────────────────────────────
-  const handleOpenSettingsFromConsent = () => {
-    console.log("[ConsentGate] Opening settings - START");
-    setIsNavigatingToSettings(true);
-    setShowConsentGate(false);
-
-    // Use setTimeout to ensure modal is fully closed before navigation
-    setTimeout(() => {
-      console.log("[ConsentGate] Navigating to security page now");
-      router.push({
-        pathname: "/(app)/(protected)/security",
-        params: { previewMode: "true" },
-      });
-    }, 100);
-  };
-
-  // ─── Handle Consent Accepted ───────────────────────────────────────────
-  const handleConsentAccepted = () => {
-    console.log("[ConsentGate] Consent accepted");
-    setShowConsentGate(false);
-    setIsNavigatingToSettings(false);
-  };
-
-  // ─── Handle Dismiss ────────────────────────────────────────────────────
-  const handleDismiss = () => {
-    console.log("[ConsentGate] Dismissed");
-    setShowConsentGate(false);
-  };
-
-  // Don't render anything while checking consent
-  if (isCheckingConsent) {
-    return null;
-  }
-
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Slot />
-      <EarningsConsentGate
-        visible={showConsentGate}
-        onDismiss={handleDismiss}
-        onOpenSettings={handleOpenSettingsFromConsent}
-        onConsentAccepted={handleConsentAccepted}
-      />
     </>
   );
 }

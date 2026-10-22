@@ -58,7 +58,6 @@ A 10% processing fee applies to all deposits.
 6. Third-Party Integrations
 Our app integrates with:
 • PalmPay - Payment processing
-• Honeygain - Bandwidth sharing services
 • Data API providers - For mobile data delivery
 Each service operates under its own privacy policy.
 
@@ -137,7 +136,6 @@ You agree not to:
 8. Third-Party Services
 We integrate with:
 • PalmPay - Payment processing
-• Honeygain - Bandwidth sharing
 • Telecom APIs - Data delivery
 Each operates under its own terms.
 
