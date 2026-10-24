@@ -90,9 +90,16 @@ Flutterwave), and the home wallet card now routes to the wallet screen. The
 function inserts a PENDING transaction and returns the checkout URL;
 completion is unchanged and stays on the web (the korapay/flutterwave
 webhooks credit the wallet). Mobile `tsc --noEmit` = 0. The function is
-**deployed (v5)**; what remains is a fresh APK (8.f.iii already shipped the
-`kesh-data` APK) and the live gateway call (a person step). See
-`TASK-8-BOARD.md` in the web repo.
+**deployed (v5)**; the `kesh-data` APK shipped (8.f.iii) and the app builds an
+AAB beside the APK (8.h). **The live gateway leg is now PROVEN (2026-10-24):**
+the four built apps were tested on a device, and three non-NG fund attempts from
+the app returned live Korapay checkout URLs plus `pending` rows in
+`global_customer_transactions` — `KES` (kesh-data/`ke`), `XAF` (sweet-data/`cm`),
+`GHS` (kwam-two/`gh`). The `403 invalid authorization key` is gone (a rejection
+writes no row). **Still unexercised:** the *post-checkout* leg — every row is
+still `pending` and every wallet balance is `0.0`, so the Korapay webhook →
+wallet-credit step has not run; complete one real mobile-money payment to close
+it. See `TASK-8-BOARD.md` in the web repo.
 
 ## Build pipeline (APK workflows) — updated 2026-10-22 (now also builds an AAB)
 
