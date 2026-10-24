@@ -67,12 +67,12 @@ export function getAssetSource(assetPath: string | undefined): any {
 // ============================================
 // Resolve the store's derived auth email
 // ============================================
-// The per-store suffix is internal: the customer signs in with the address
-// they registered with. The function maps it to the Supabase Auth identity
-// behind it (service-role only, so it runs server-side). Invoked through the
-// configured client rather than a hand-built fetch, so it reuses the app's
-// Supabase URL and publishable key.
-async function getCustomerAuthEmail(
+// The per-store suffix is internal: both a customer and the store owner sign
+// in with the address they registered with, and the function maps it to the
+// Supabase Auth identity behind it (service-role only, so it runs
+// server-side). Invoked through the configured client rather than a
+// hand-built fetch, so it reuses the app's Supabase URL and publishable key.
+async function resolveAuthEmail(
   originalEmail: string,
   resellerId: string,
 ): Promise<string | null> {
@@ -130,16 +130,16 @@ export default function LoginScreen() {
       // The per-store suffix on the stored auth email is internal only: the
       // customer always types the address they registered with. Resolve it
       // to the Supabase Auth identity behind it, and fall back to the typed
-      // address for accounts whose auth email is the real one (store
-      // owners, and customers registered before the suffix existed). This
-      // mirrors the web storefront's sign-in exactly.
+      // address for accounts whose auth email is the real one (customers
+      // registered before the suffix existed). This mirrors the web
+      // storefront's sign-in exactly.
       //
       // Deliberately no client-side reconstruction of the derived email:
       // web signup uses a random suffix and mobile a deterministic one, so a
       // guess is wrong for anyone who registered on the other platform, and
       // a wrong guess surfaces as a misleading "invalid credentials".
       const authEmail = resellerId
-        ? await getCustomerAuthEmail(email, resellerId)
+        ? await resolveAuthEmail(email, resellerId)
         : null;
       const loginEmail = authEmail || email.trim().toLowerCase();
 
