@@ -60,6 +60,22 @@ in the web repo, so the two can be checked out side by side.
 
 ## Current status (mirror only — see master for full detail)
 
+**Task 8, 8.i — store owner login (2026-10-24):** the owner can now sign in on
+mobile. The login screen resolves the typed address to the Supabase Auth
+identity behind it by calling `global-store-customer-auth-email`, and that
+resolver searched only `global_customers`. A reseller has no customer row — their
+Auth identity is the application's own derived alias
+(`<local>+reseller-<cc>-<slug>-<rand>@<domain>`) — so an owner resolved to
+`null`, the screen fell back to the typed address, and sign-in failed with
+"Invalid login credentials". Customers were unaffected. The resolver now also
+matches the typed address against this store's `global_reseller_applications`
+row (store-scoped, exact). Fixed in the web repo's `_shared/storeAuthEmail.ts`,
+deployed as edge function **v6**, and live-verified; the mobile change here is
+only the helper rename (`getCustomerAuthEmail` → `resolveAuthEmail`, since it now
+serves both roles). Mobile `tsc --noEmit` = 0. **The fix reaches a device in the
+next APK build** — the edge function is already deployed, so a rebuild is all
+that is needed.
+
 **Task 1 — Supabase direct DB dump:** OPEN. The direct `pg_dump`
 command block and the wrapper script (`scripts/supabase_dump.sh`) both
 live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
@@ -90,9 +106,16 @@ Flutterwave), and the home wallet card now routes to the wallet screen. The
 function inserts a PENDING transaction and returns the checkout URL;
 completion is unchanged and stays on the web (the korapay/flutterwave
 webhooks credit the wallet). Mobile `tsc --noEmit` = 0. The function is
-**deployed (v5)**; what remains is a fresh APK (8.f.iii already shipped the
-`kesh-data` APK) and the live gateway call (a person step). See
-`TASK-8-BOARD.md` in the web repo.
+**deployed (v5)**; the `kesh-data` APK shipped (8.f.iii) and the app builds an
+AAB beside the APK (8.h). **The live gateway leg is now PROVEN (2026-10-24):**
+the four built apps were tested on a device, and three non-NG fund attempts from
+the app returned live Korapay checkout URLs plus `pending` rows in
+`global_customer_transactions` — `KES` (kesh-data/`ke`), `XAF` (sweet-data/`cm`),
+`GHS` (kwam-two/`gh`). The `403 invalid authorization key` is gone (a rejection
+writes no row). **Still unexercised:** the *post-checkout* leg — every row is
+still `pending` and every wallet balance is `0.0`, so the Korapay webhook →
+wallet-credit step has not run; complete one real mobile-money payment to close
+it. See `TASK-8-BOARD.md` in the web repo.
 
 ## Build pipeline (APK workflows) — updated 2026-10-22 (now also builds an AAB)
 
