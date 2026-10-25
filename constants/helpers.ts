@@ -21,78 +21,9 @@ export const getNetworkImage = (networkKey: string) => {
   );
 };
 
-// Network prefix auto-detection, per country. Prefix tables are only
-// published for Nigeria; the other countries in countryConfig have no prefix
-// data, so their storefronts let the customer pick the network from
-// countryConfig.telecoms instead of guessing from the number.
-export const NETWORK_PREFIXES_BY_COUNTRY: {
-  [countryCode: string]: { [networkKey: string]: string[] };
-} = {
-  ng: {
-    mtn: [
-    "07025",
-    "07026",
-    "0703",
-    "0706",
-    "0707",
-    "0704",
-    "0803",
-    "0806",
-    "0810",
-    "0813",
-    "0814",
-    "0816",
-    "0903",
-    "0906",
-    "0913",
-    "0916",
-  ],
-  airtel: [
-    "0701",
-    "0708",
-    "0802",
-    "0808",
-    "0812",
-    "0901",
-    "0902",
-    "0904",
-    "0907",
-    "0912",
-    "0911",
-  ],
-    glo: ["0805", "0807", "0705", "0815", "0811", "0905", "0915"],
-    "9mobile": ["0809", "0817", "0818", "0908", "0909"],
-  },
-};
-
-/** Prefixes for one country, or null when that country has no prefix table. */
-export function getNetworkPrefixes(
-  countryCode: string | undefined,
-): { [networkKey: string]: string[] } | null {
-  return NETWORK_PREFIXES_BY_COUNTRY[(countryCode || "").toLowerCase()] || null;
-}
-
-/**
- * Detect a network from a local phone number. Returns null for a country
- * with no prefix table, or when no prefix matches - the caller then shows a
- * manual picker rather than guessing.
- */
-export function detectNetwork(
-  phoneNumber: string,
-  countryCode: string | undefined,
-): string | null {
-  const prefixes = getNetworkPrefixes(countryCode);
-  if (!prefixes) return null;
-
-  for (const [networkKey, list] of Object.entries(prefixes)) {
-    for (const prefix of list) {
-      if (phoneNumber.startsWith(prefix) && phoneNumber.length >= prefix.length) {
-        return networkKey.toUpperCase();
-      }
-    }
-  }
-  return null;
-}
+// Network detection lives in constants/networkDetection.ts (with its
+// generated prefix tables in constants/networkPrefixes.ts), kept free of
+// image imports so it can be unit-checked under plain Node.
 
 // Mock create action - replace with actual API call
 export const createVirtualAccountAction = async (formData: any) => {

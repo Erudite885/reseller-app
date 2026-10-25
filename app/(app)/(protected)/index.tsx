@@ -3,17 +3,17 @@
 import { PlanCarousel } from "@/components/PlanCarousel";
 import { Button, Card, Input, Toast } from "@/components/ui";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
+import { getNetworkColorLight, getNetworkImage } from "@/constants/helpers";
 import {
   detectNetwork,
-  getNetworkColorLight,
-  getNetworkImage,
-  getNetworkPrefixes,
-} from "@/constants/helpers";
+  isValidNationalPhoneNumber,
+  MIN_DETECT_DIGITS,
+} from "@/constants/networkDetection";
 import {
   getCountryConfig,
   getQuickAmounts,
 } from "@/constants/countryConfig";
-import { useDataPlansByNetwork, useStoreCatalog } from "@/hooks/useDataPlans";
+import { useDataPlansByNetwork } from "@/hooks/useDataPlans";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
 import {
@@ -98,43 +98,35 @@ export default function HomeScreen() {
   const { data: dataPlans = [], isLoading: isDataPlansLoading } =
     useDataPlansByNetwork(network);
 
-  // The store's own networks, for countries with no prefix table. Nigeria
-  // auto-detects from the phone number instead, so this stays unused there.
-  const { data: storeCatalog } = useStoreCatalog();
-  const storeNetworks = storeCatalog?.networks ?? [];
-
   // Purchase hooks
   const purchaseDataMutation = usePurchaseData();
   const purchaseAirtimeMutation = usePurchaseAirtime();
 
-  // Auto-detect network from phone number, but only where a prefix table
-  // exists (Nigeria today). Other countries pick from countryConfig.telecoms.
-  const networkPrefixes = getNetworkPrefixes(countryCode);
-
+  // Resolve the network from the typed number for every country: the first
+  // MIN_DETECT_DIGITS digits identify the operator, and the plans shown are
+  // whatever that network sells in this store. There is no manual picker -
+  // the number is the only input. setState bails out when the value is
+  // unchanged, so this settles after one pass.
   useEffect(() => {
-    if (!networkPrefixes) {
-      return;
-    }
-    if (phoneNumber.length >= 4) {
-      const detectedNetwork = detectNetwork(phoneNumber, countryCode);
+    const detected =
+      phoneNumber.length >= MIN_DETECT_DIGITS
+        ? detectNetwork(phoneNumber, countryCode)
+        : null;
 
-      if (detectedNetwork) {
-        setNetwork(detectedNetwork);
-        setSelectedPlanId(null);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } else {
-        setNetwork("");
-        setSelectedPlanId(null);
-      }
+    if (detected) {
+      setNetwork(detected);
     } else {
       setNetwork("");
-      setSelectedPlanId(null);
     }
-  }, [phoneNumber, networkPrefixes, countryCode]);
+    setSelectedPlanId(null);
+  }, [phoneNumber, countryCode]);
 
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "");
-    const limited = cleaned.substring(0, country.phoneNumber.maxDigits);
+    // One more than the national significant number: a user types the trunk
+    // `0` (NG `0803...`), matching the web storefront and what the providers
+    // expect. Validation counts the number without that `0`.
+    const limited = cleaned.substring(0, country.phoneNumber.maxDigits + 1);
     setPhoneNumber(limited);
   };
 
@@ -196,11 +188,10 @@ export default function HomeScreen() {
     }
 
     // countryConfig.phoneNumber is the source of truth for a valid local
-    // number length (the input is capped at maxDigits as it is typed).
-    if (
-      phoneNumber.length < country.phoneNumber.minDigits ||
-      phoneNumber.length > country.phoneNumber.maxDigits
-    ) {
+    // number length (the input is capped at maxDigits + 1 as it is typed, to
+    // leave room for the trunk `0`). Validation counts the national
+    // significant number, so `0803...` and `803...` both pass.
+    if (!isValidNationalPhoneNumber(phoneNumber, country.phoneNumber)) {
       showToast(
         `Enter a valid ${country.name} phone number (${country.phoneNumber.minDigits} digits).`,
         "error",
@@ -1024,55 +1015,6 @@ export default function HomeScreen() {
                   </View>
                 )}
               </>
-            ) : storeNetworks.length > 0 ? (
-              <View style={{ paddingHorizontal: Spacing.md }}>
-                <Text
-                  style={{
-                    fontSize: Typography.sizes.sm,
-                    color: colors.textSecondary,
-                    marginBottom: Spacing.sm,
-                    paddingHorizontal: Spacing.xs,
-                  }}
-                >
-                  Select network
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: Spacing.sm,
-                  }}
-                >
-                  {storeNetworks.map((net) => (
-                    <Pressable
-                      key={net}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setNetwork(net.toUpperCase());
-                        setSelectedPlanId(null);
-                      }}
-                      style={{
-                        backgroundColor: colors.card,
-                        paddingVertical: Spacing.sm,
-                        paddingHorizontal: Spacing.lg,
-                        borderRadius: Radius.md,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: Typography.sizes.base,
-                          fontWeight: Typography.weights.semibold,
-                          color: colors.text,
-                        }}
-                      >
-                        {net}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
             ) : (
               <View
                 style={{
@@ -1094,7 +1036,9 @@ export default function HomeScreen() {
                     textAlign: "center",
                   }}
                 >
-                  Enter a phone number to see available plans
+                  {phoneNumber.length < MIN_DETECT_DIGITS
+                    ? `Enter the first ${MIN_DETECT_DIGITS} digits of your ${country.name} phone number to see the plans for your network`
+                    : `We could not identify a network for that number. Please check the ${country.name} number you entered.`}
                 </Text>
               </View>
             )}

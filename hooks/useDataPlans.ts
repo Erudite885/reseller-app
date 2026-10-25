@@ -31,9 +31,6 @@ export interface DataPlan {
  * app never needs to resolve it at runtime.
  *
  * Returns every plan for the store plus the store's own `networks` list.
- * That list is what the customer picks from in countries with no prefix
- * table (see constants/helpers.ts); Nigeria still auto-detects from the
- * phone number.
  */
 export function useStoreCatalog() {
   const resellerId = useResellerStore.getState().config.resellerId;
