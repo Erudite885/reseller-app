@@ -1,22 +1,30 @@
 // scripts/generate-network-prefixes.mjs
 //
-// Regenerates constants/networkPrefixes.ts from Google's libphonenumber
-// carrier data (resources/carrier/en/<dial-code>.txt), which maps a national
-// number prefix to the operator that owns it.
+// Regenerates constants/networkPrefixes.ts from Google's libphonenumber data:
+//
+//   - resources/carrier/en/<dial-code>.txt - national number prefix -> operator
+//   - resources/PhoneNumberMetadata.xml    - each country's trunk prefix
 //
 // Why generate instead of hand-writing: the tables are large (South Africa
 // alone has 138 entries) and drift as regulators reassign ranges. The source
 // is the same dataset Android's phone stack uses, so it agrees with what a
 // device reports.
 //
-// The app matches on the local, trunk-`0`-less national prefix (e.g. NG `803`),
-// so the country dial code is stripped here and detectNetwork() strips a
-// leading `0` from what the user types. Carrier names in the source are
-// marketing names that drift (`at`, `MTN Cameroon`, `Togocel`) or are
-// historical (`Areeba`), so each country has an alias map onto the network
-// names the catalog actually uses - the names in constants/countryConfig.ts.
-// A carrier with no alias is dropped: the store sells no plans for it, so
-// detecting it would only produce an empty list.
+// The tables are keyed on the FULL dialed local number, trunk prefix
+// included - a Nigerian `0803`, not `803`. The carrier files give the national
+// significant number with the country code stripped but the trunk `0` also
+// gone, so the trunk is read back out of the metadata and prepended. That
+// matters for two reasons: the providers expect the trunk form (`0803...`),
+// and the countries with no trunk at all (Benin, Cote d'Ivoire, Congo, Gabon)
+// have numbers that legitimately begin with `0`, so stripping it would break
+// them. detectNetwork() therefore does NOT strip anything - it matches the
+// typed digits as-is.
+//
+// Carrier names in the source are marketing names that drift (`at`,
+// `MTN Cameroon`, `Togocel`) or are historical (`Areeba`), so each country has
+// an alias map onto the network names the catalog actually uses - the names in
+// constants/countryConfig.ts. A carrier with no alias is dropped: the store
+// sells no plans for it, so detecting it would only produce an empty list.
 //
 // Run: node scripts/generate-network-prefixes.mjs
 
@@ -62,20 +70,49 @@ const ALIASES = {
   zm: { MTN: "MTN", Airtel: "Airtel", ZAMTEL: "Zamtel" },
 };
 
-// Longest prefix the app can ever match: detection reads at most the first
-// MAX_DETECT_DIGITS digits, so anything longer is dead weight.
-const MAX_PREFIX_DIGITS = 6;
-
-const BASE =
+const CARRIER_BASE =
   "https://raw.githubusercontent.com/google/libphonenumber/master/resources/carrier/en";
+const METADATA_URL =
+  "https://raw.githubusercontent.com/google/libphonenumber/master/resources/PhoneNumberMetadata.xml";
+
+/** Territory id (ISO alpha-2, upper case) for each country we ship to. */
+const TERRITORY = Object.fromEntries(
+  Object.keys(DIAL).map((cc) => [cc, cc.toUpperCase()]),
+);
+
+/**
+ * The trunk prefix each country's subscribers dial before the national
+ * significant number, read from libphonenumber's metadata. Empty string means
+ * the country has no trunk (its numbers start with the significant digits, and
+ * for Benin/Cote d'Ivoire/Congo/Gabon that first digit is often `0`).
+ *
+ * Parsed from the `<territory>` opening tag. The regex requires the attribute
+ * to be preceded by a non-letter, otherwise it also matches the tail of
+ * `internationalPrefix="..."` - which silently yielded `00` for every country.
+ */
+function parseTrunkPrefixes(xml) {
+  const parsed = {};
+  for (const [cc, territory] of Object.entries(TERRITORY)) {
+    const tag = xml.match(new RegExp(`<territory id="${territory}"[^>]*>`));
+    if (!tag) throw new Error(`${cc}: territory ${territory} not in metadata`);
+    const match = tag[0].match(/(?<![a-zA-Z])nationalPrefix="([^"]*)"/);
+    parsed[cc] = match ? match[1] : "";
+  }
+  return parsed;
+}
+
+const metadata = await (await fetch(METADATA_URL)).text();
+const TRUNKS = parseTrunkPrefixes(metadata);
 
 const tables = {};
+const trunks = {};
 
 for (const [cc, dial] of Object.entries(DIAL)) {
-  const res = await fetch(`${BASE}/${dial}.txt`);
+  const res = await fetch(`${CARRIER_BASE}/${dial}.txt`);
   if (!res.ok) throw new Error(`${cc}: HTTP ${res.status}`);
   const text = await res.text();
   const alias = ALIASES[cc] ?? {};
+  const trunk = TRUNKS[cc] ?? "";
   const byNetwork = {};
 
   for (const line of text.split("\n")) {
@@ -87,9 +124,24 @@ for (const [cc, dial] of Object.entries(DIAL)) {
     if (!e164.startsWith(String(dial))) {
       throw new Error(`${cc}: ${e164} does not start with ${dial}`);
     }
-    const national = e164.slice(String(dial).length);
-    if (!national || national.length > MAX_PREFIX_DIGITS) continue;
+    // The carrier file lists the national significant number; put the trunk
+    // back so the key is exactly what the subscriber dials.
+    const national = trunk + e164.slice(String(dial).length);
+    if (!national) continue;
     (byNetwork[network] ??= new Set()).add(national);
+  }
+
+  // Two networks must never share a prefix, or detection would be a coin toss.
+  const owners = {};
+  for (const [network, prefixes] of Object.entries(byNetwork)) {
+    for (const prefix of prefixes) {
+      if (owners[prefix] && owners[prefix] !== network) {
+        throw new Error(
+          `${cc}: prefix ${prefix} claimed by ${owners[prefix]} and ${network}`,
+        );
+      }
+      owners[prefix] = network;
+    }
   }
 
   tables[cc] = Object.fromEntries(
@@ -100,23 +152,29 @@ for (const [cc, dial] of Object.entries(DIAL)) {
         [...prefixes].sort((a, b) => a.length - b.length || a.localeCompare(b)),
       ]),
   );
+  trunks[cc] = trunk;
 }
 
 const header = `// constants/networkPrefixes.ts
 //
 // GENERATED - do not edit by hand.
-// Source: Google libphonenumber carrier data
-// (resources/carrier/en/<dial-code>.txt), fetched by
-// scripts/generate-network-prefixes.mjs.
+// Source: Google libphonenumber (resources/carrier/en/<dial-code>.txt for the
+// prefixes, resources/PhoneNumberMetadata.xml for the trunk prefixes), fetched
+// by scripts/generate-network-prefixes.mjs.
 //
-// Maps a country's local mobile prefixes (national format, no country code and
-// no trunk \`0\`) to the network names used by the catalog and
-// constants/countryConfig.ts. detectNetwork() strips a leading \`0\` from the
-// typed number before matching, so both \`0803...\` and \`803...\` resolve.
+// Maps a country's local mobile prefixes, in the FULL form the subscriber
+// dials - trunk \`0\` included (\`0803\`, not \`803\`) - to the network names used
+// by the catalog and constants/countryConfig.ts. detectNetwork() matches the
+// typed digits as-is and never strips a leading \`0\`, so a trunkless \`803\`
+// does NOT resolve.
 //
 // A country with no entry has no published carrier data; detectNetwork()
 // returns null for it and the caller shows the store's own network list.
 
+/** Trunk prefix per country, "" when the country has none. */
+export const NATIONAL_TRUNK_BY_COUNTRY: Record<string, string> = `;
+
+const tablesHeader = `
 export const NETWORK_PREFIXES_BY_COUNTRY: Record<
   string,
   Record<string, string[]>
@@ -124,12 +182,19 @@ export const NETWORK_PREFIXES_BY_COUNTRY: Record<
 
 writeFileSync(
   new URL("../constants/networkPrefixes.ts", import.meta.url),
-  header + JSON.stringify(tables, null, 2) + ";\n",
+  header +
+    JSON.stringify(trunks, null, 2) +
+    ";\n" +
+    tablesHeader +
+    JSON.stringify(tables, null, 2) +
+    ";\n",
 );
 
 for (const [cc, nets] of Object.entries(tables)) {
   const summary = Object.entries(nets)
     .map(([n, p]) => `${n}(${p.length})`)
     .join(" ");
-  console.log(cc, summary || "(none)");
+  console.log(
+    `${cc} trunk=${JSON.stringify(trunks[cc])} ${summary || "(none)"}`,
+  );
 }

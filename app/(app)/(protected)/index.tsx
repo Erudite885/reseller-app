@@ -6,6 +6,7 @@ import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getNetworkColorLight, getNetworkImage } from "@/constants/helpers";
 import {
   detectNetwork,
+  getNationalTrunk,
   isValidNationalPhoneNumber,
   MIN_DETECT_DIGITS,
 } from "@/constants/networkDetection";
@@ -105,8 +106,10 @@ export default function HomeScreen() {
   // Resolve the network from the typed number for every country: the first
   // MIN_DETECT_DIGITS digits identify the operator, and the plans shown are
   // whatever that network sells in this store. There is no manual picker -
-  // the number is the only input. setState bails out when the value is
-  // unchanged, so this settles after one pass.
+  // the number is the only input. Detection matches the number as typed, trunk
+  // `0` included, so it fires once the user has typed that much of a real
+  // number. setState bails out when the value is unchanged, so this settles
+  // after one pass.
   useEffect(() => {
     const detected =
       phoneNumber.length >= MIN_DETECT_DIGITS
@@ -123,11 +126,12 @@ export default function HomeScreen() {
 
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "");
-    // One more than the national significant number: a user types the trunk
-    // `0` (NG `0803...`), matching the web storefront and what the providers
-    // expect. Validation counts the number without that `0`.
-    const limited = cleaned.substring(0, country.phoneNumber.maxDigits + 1);
-    setPhoneNumber(limited);
+    // Cap at the national significant number plus the trunk the user dials, so
+    // a Nigerian number can hold its `0` (11 digits) while a Benin number - no
+    // trunk - is capped at 10. Matches the web storefront and what the
+    // providers expect.
+    const limit = country.phoneNumber.maxDigits + getNationalTrunk(countryCode).length;
+    setPhoneNumber(cleaned.substring(0, limit));
   };
 
   const onRefresh = async () => {
@@ -189,9 +193,16 @@ export default function HomeScreen() {
 
     // countryConfig.phoneNumber is the source of truth for a valid local
     // number length (the input is capped at maxDigits + 1 as it is typed, to
-    // leave room for the trunk `0`). Validation counts the national
-    // significant number, so `0803...` and `803...` both pass.
-    if (!isValidNationalPhoneNumber(phoneNumber, country.phoneNumber)) {
+    // leave room for the trunk `0`). Validation removes the country's own
+    // trunk prefix and measures the national significant number, so a Nigerian
+    // `0803...` passes while the trunkless `803...` does not.
+    if (
+      !isValidNationalPhoneNumber(
+        phoneNumber,
+        country.phoneNumber,
+        countryCode,
+      )
+    ) {
       showToast(
         `Enter a valid ${country.name} phone number (${country.phoneNumber.minDigits} digits).`,
         "error",

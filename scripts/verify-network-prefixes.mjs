@@ -1,8 +1,6 @@
 // scripts/verify-network-prefixes.mjs
 //
-// Checks the generated prefix tables in constants/networkPrefixes.ts against
-// known-good numbers for every country the app ships to. Run after
-// regenerating the tables:
+// Checks the generated prefix tables in constants/networkPrefixes.ts.
 //
 //   node scripts/generate-network-prefixes.mjs
 //   node scripts/verify-network-prefixes.mjs
@@ -15,6 +13,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const out = mkdtempSync(join(tmpdir(), "netprefix-"));
+let failures = 0;
+
+const check = (label, got, want) => {
+  const norm = (v) => (v == null ? null : String(v).toUpperCase());
+  const ok = norm(got) === norm(want);
+  if (!ok) failures++;
+  console.log(`${ok ? "PASS" : "FAIL"} ${label} = ${got} (want ${want})`);
+};
+
+/** A full-length number starting with `prefix`, for detection at any depth. */
+const fullNumber = (prefix) => (prefix + "000000000000").slice(0, 12);
+
 try {
   execFileSync(
     "npx",
@@ -45,56 +55,145 @@ try {
 
   const { detectNetwork, isValidNationalPhoneNumber, MIN_DETECT_DIGITS } =
     await import(entry);
+  const { NETWORK_PREFIXES_BY_COUNTRY } = await import(
+    join(out, "networkPrefixes.js")
+  );
 
-  const norm = (v) => (v == null ? null : String(v).toUpperCase());
-
-  // [typed number, country, expected network]. Covers every country with a
-  // table, both the trunk-`0` and bare forms, and the null cases.
+  // --- Explicit cases. The full dialed form resolves; the trunkless form does
+  //     not, for countries that have a trunk. ---
   const cases = [
-    ["0803", "ng", "MTN"], ["08036012345", "ng", "MTN"], ["8036012345", "ng", "MTN"],
-    ["0903", "ng", "MTN"], ["0805", "ng", "GLO"], ["0705", "ng", "GLO"],
-    ["0802", "ng", "AIRTEL"], ["0808", "ng", "AIRTEL"],
-    ["0809", "ng", "9MOBILE"], ["0817", "ng", "9MOBILE"],
-    ["024", "gh", "MTN"], ["054", "gh", "MTN"], ["020", "gh", "Telecel"],
-    ["027", "gh", "AirtelTigo"], ["057", "gh", "AirtelTigo"],
+    // Nigeria (trunk `0` required).
+    ["0803", "ng", "MTN"], ["08036012345", "ng", "MTN"], ["0903", "ng", "MTN"],
+    ["0805", "ng", "GLO"], ["0802", "ng", "AIRTEL"], ["0809", "ng", "9MOBILE"],
+    ["8036012345", "ng", null], ["803", "ng", null],
+    // Ghana (trunk `0`).
+    ["024", "gh", "MTN"], ["020", "gh", "Telecel"], ["023", "gh", "AirtelTigo"],
+    ["244123456", "gh", null],
+    // Kenya (trunk `0`).
     ["0722", "ke", "Safaricom"], ["0733", "ke", "Airtel"], ["077", "ke", "KenyaTelkom"],
-    ["067", "cm", "MTN"], ["069", "cm", "Orange"], ["062", "cm", "Camtel"],
+    // South Africa (trunk `0`). Longest prefix wins, so a 4-digit MTN range
+    // beats the 3-digit range it sits inside.
+    ["082", "za", "Vodacom"], ["083", "za", "MTN"], ["084", "za", "CellC"],
+    ["019", "za", "TelkomMobile"], ["081", "za", null],
+    ["0690", "za", "MTN"], ["0710", "za", "MTN"],
+    // No trunk, and the leading `0` is a significant digit - it must NOT be
+    // stripped. These are the countries the old strip-a-leading-`0` code broke.
+    ["0145", "bj", "Moov"], ["0155", "bj", "Moov"], ["0142", "bj", "MTN"],
+    ["0150", "bj", "MTN"],
+    ["01", "ci", "Moov"], ["05", "ci", "MTN"], ["07", "ci", "Orange"],
+    ["06", "cg", "MTN"],
+    ["05000000", "ga", "Moov"],
+    // No trunk, numbers start with a significant digit.
+    ["67", "cm", "MTN"], ["69", "cm", "Orange"], ["62", "cm", "Camtel"],
+    ["067", "cm", null],
+    // Zambia / Uganda (trunk `0`).
     ["096", "zm", "MTN"], ["097", "zm", "Airtel"], ["095", "zm", "Zamtel"],
     ["077", "ug", "MTN"], ["075", "ug", "Airtel"], ["071", "ug", "Telecom"],
-    ["082", "za", "Vodacom"], ["083", "za", "MTN"], ["084", "za", "CellC"],
-    ["0810", "za", "MTN"], ["0811", "za", "TelkomMobile"], ["072", "za", "Vodacom"],
-    ["066", "td", "Airtel"], ["090", "tg", "Togocel"],
-    ["080", "ng", null], ["08", "ng", null], ["", "ng", null],
+    // The trunkless form must NOT resolve in any trunk country.
+    ["96", "zm", null], ["97", "zm", null],
+    ["77", "ug", null], ["75", "ug", null], ["71", "ug", null],
+    ["82", "za", null], ["83", "za", null],
+    ["722", "ke", null], ["733", "ke", null],
+    // Too short / unknown / unmapped.
+    ["080", "ng", null], ["", "ng", null],
     ["0803", "xx", null], ["0803", undefined, null],
   ];
-
-  const lengthCases = [
-    ["08036012345", { minDigits: 10, maxDigits: 10 }, true],
-    ["0803601234", { minDigits: 10, maxDigits: 10 }, false],
-    ["0244123456", { minDigits: 9, maxDigits: 9 }, true],
-    ["024412345", { minDigits: 9, maxDigits: 9 }, false],
-  ];
-
-  let failures = 0;
-  const check = (label, got, want) => {
-    const ok = norm(got) === norm(want);
-    if (!ok) failures++;
-    console.log(`${ok ? "PASS" : "FAIL"} ${label} = ${got} (want ${want})`);
-  };
-
   for (const [input, cc, want] of cases) {
     check(`detect(${JSON.stringify(input)}, ${cc})`, detectNetwork(input, cc), want);
   }
-  for (const [input, cfg, want] of lengthCases) {
-    check(`valid(${JSON.stringify(input)})`, isValidNationalPhoneNumber(input, cfg), want);
+
+  // --- Length validation removes the country's own trunk, not any leading 0.
+  //     For a trunk country the trunk is required, so the trunkless form fails.
+  const lengthCases = [
+    ["08036012345", { minDigits: 10, maxDigits: 10 }, "ng", true],
+    ["0803601234", { minDigits: 10, maxDigits: 10 }, "ng", false],
+    ["8036012345", { minDigits: 10, maxDigits: 10 }, "ng", false],
+    ["0195123456", { minDigits: 10, maxDigits: 10 }, "bj", true],
+    ["019512345", { minDigits: 10, maxDigits: 10 }, "bj", false],
+    ["0231234567", { minDigits: 9, maxDigits: 9 }, "gh", true],
+    ["231234567", { minDigits: 9, maxDigits: 9 }, "gh", false],
+    ["023123456", { minDigits: 9, maxDigits: 9 }, "gh", false],
+    ["0712123456", { minDigits: 9, maxDigits: 9 }, "ke", true],
+    ["712123456", { minDigits: 9, maxDigits: 9 }, "ke", false],
+  ];
+  for (const [input, cfg, cc, want] of lengthCases) {
+    check(
+      `valid(${JSON.stringify(input)}, ${cc})`,
+      isValidNationalPhoneNumber(input, cfg, cc),
+      want,
+    );
   }
+
+  // --- Invariant: typing any published prefix in full resolves to a network.
+  let orphan = 0;
+  let prefixCount = 0;
+  for (const [cc, nets] of Object.entries(NETWORK_PREFIXES_BY_COUNTRY)) {
+    for (const prefixes of Object.values(nets)) {
+      for (const prefix of prefixes) {
+        prefixCount++;
+        if (!detectNetwork(fullNumber(prefix), cc)) orphan++;
+      }
+    }
+  }
+  check(`all ${prefixCount} published prefixes resolve once typed in full`, orphan, 0);
+
+  // --- Invariant: every network in the table is reachable - at least one of its
+  //     prefixes resolves to it (none is entirely shadowed by a longer range).
+  let unreachable = 0;
+  for (const [cc, nets] of Object.entries(NETWORK_PREFIXES_BY_COUNTRY)) {
+    for (const [network, prefixes] of Object.entries(nets)) {
+      const reachable = prefixes.some(
+        (p) => detectNetwork(fullNumber(p), cc) === network.toUpperCase(),
+      );
+      if (!reachable) {
+        unreachable++;
+        console.log(`FAIL ${cc} network ${network} is unreachable`);
+      }
+    }
+  }
+  check("every network is reachable by at least one prefix", unreachable, 0);
+
+  // --- Invariant: the MIN_DETECT_DIGITS gate never resolves to the WRONG
+  //     network. For any published prefix, looking at only the first
+  //     MIN_DETECT_DIGITS digits yields either nothing (a range whose
+  //     distinguishing digits come later, e.g. the seven-digit South African
+  //     landlines) or exactly the network the full number resolves to. It can
+  //     never show one network's plans for another network's number.
+  let gatedChecked = 0;
+  let gatedWrong = 0;
+  let gatedDeferred = 0;
+  for (const [cc, nets] of Object.entries(NETWORK_PREFIXES_BY_COUNTRY)) {
+    for (const prefixes of Object.values(nets)) {
+      for (const prefix of prefixes) {
+        gatedChecked++;
+        const full = fullNumber(prefix);
+        const inFull = detectNetwork(full, cc);
+        const atGate = detectNetwork(full.slice(0, MIN_DETECT_DIGITS), cc);
+        if (atGate === null) {
+          gatedDeferred++;
+        } else if (atGate !== inFull) {
+          gatedWrong++;
+          if (gatedWrong <= 10) {
+            console.log(
+              `FAIL gate ${cc} ${prefix}: ${atGate} at the gate vs ${inFull} in full`,
+            );
+          }
+        }
+      }
+    }
+  }
+  check(
+    `gate never mis-resolves (checked ${gatedChecked}, ${gatedDeferred} deferred)`,
+    gatedWrong,
+    0,
+  );
 
   console.log(`\nMIN_DETECT_DIGITS=${MIN_DETECT_DIGITS}`);
   if (failures) {
     console.error(`\n${failures} FAILURE(S)`);
     process.exitCode = 1;
   } else {
-    console.log(`\nALL ${cases.length + lengthCases.length} CHECKS PASS`);
+    console.log(`\nALL CHECKS PASS`);
   }
 } finally {
   rmSync(out, { recursive: true, force: true });
