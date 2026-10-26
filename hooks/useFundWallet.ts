@@ -1,17 +1,17 @@
 // hooks/useFundWallet.ts
 //
-// Task 8, branch 8.f.ii. Mobile-money wallet funding through the
-// global-store-fund-wallet edge function. The app cannot call the web's
-// Next.js server action, so the function is the Deno port of
+// Task 8, branch 8.f.ii; reworked in 8.k.i. Mobile-money wallet funding
+// through the global-store-fund-wallet edge function. The app cannot call the
+// web's Next.js server action, so the function is the Deno port of
 // fundWallet.ts / fundGlobalCustomerWallet.ts and returns a checkout URL.
 //
 // This hook only *initiates*. Completion is server-side: the korapay /
-// flutterwave webhooks match the reference and credit the wallet. The
-// caller opens the returned URL in a browser and the balance updates once
-// the webhook lands, so refresh the wallet query on return.
+// flutterwave webhooks match the reference and credit the wallet. The caller
+// renders the returned URL in an in-app sheet (components/PaymentWebView.tsx)
+// and refreshes the wallet query once the payer returns — so the payer is
+// never handed to the OS browser.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import * as WebBrowser from "expo-web-browser";
 import { useAuthStore } from "@/store/auth.store";
 import { useResellerStore } from "@/store/resellerStore";
 import { callStoreFunction } from "@/lib/storeApi";
@@ -44,35 +44,20 @@ export function useFundWallet() {
     }: FundWalletParams): Promise<FundWalletResult> => {
       if (!user?.id) throw new Error("No user");
 
-      const result = await callStoreFunction<FundWalletResult>(
-        "global-store-fund-wallet",
-        { amount, mobileMoney },
-      );
-
-      return result;
+      return callStoreFunction<FundWalletResult>("global-store-fund-wallet", {
+        amount,
+        mobileMoney,
+      });
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
+      // A pending transaction now exists. The wallet and transaction lists
+      // pick up the credit once the webhook lands; the caller refreshes them
+      // again when the payer closes the checkout sheet.
       queryClient.invalidateQueries({ queryKey: ["wallet", resellerId, user?.id] });
       queryClient.invalidateQueries({
         queryKey: ["virtual_accounts", resellerId, user?.id],
       });
       queryClient.invalidateQueries({ queryKey: ["transactions", resellerId, user?.id] });
-
-      // Hand the payer to the gateway's checkout page. openBrowserAsync
-      // resolves when the sheet closes, which is also when the payer is
-      // back from the redirect - a good moment to refetch the balance.
-      const url = result.data?.redirectUrl;
-      if (url) {
-        WebBrowser.openBrowserAsync(url)
-          .then(() => {
-            queryClient.invalidateQueries({ queryKey: ["wallet", resellerId, user?.id] });
-            queryClient.invalidateQueries({ queryKey: ["transactions", resellerId, user?.id] });
-          })
-          .catch(() => {
-            // The payer closed the sheet; the webhook still completes the
-            // deposit, so nothing to surface here.
-          });
-      }
     },
   });
 }
