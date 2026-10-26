@@ -1,5 +1,6 @@
 // app/(app)/(protected)/wallet.tsx
 import { Button, Card, Input } from "@/components/ui";
+import { PaymentWebView, type PaymentReturn } from "@/components/PaymentWebView";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getCountryConfig } from "@/constants/countryConfig";
 import { useFundWallet } from "@/hooks/useFundWallet";
@@ -10,9 +11,10 @@ import {
   useVirtualAccounts,
 } from "@/hooks/useVirtualAccounts";
 import { useResellerStore } from "@/store/resellerStore";
+import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +30,7 @@ import {
 export default function WalletScreen() {
   const { colors, shadows } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Funding is country-scoped. Nigeria's gateway (xixapay) issues virtual
   // accounts; every other country funds by mobile money through
@@ -52,6 +55,8 @@ export default function WalletScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [amount, setAmount] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
+  // The gateway checkout URL currently open in the in-app sheet (8.k.i).
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   // Has virtual account
   const hasVirtualAccount = (virtualAccounts?.length ?? 0) > 0;
@@ -59,6 +64,23 @@ export default function WalletScreen() {
   // Flutterwave needs the payer's MSISDN up front; korapay (checkout
   // redirect) collects it on its own page. Mirrors the web storefront.
   const needsMobileNumber = country.paymentGateway.provider === "flutterwave";
+
+  // The payer is back from the gateway (or closed the sheet). The webhook is
+  // what credits the wallet, so just refresh and let the balance land.
+  const handleCheckoutClose = useCallback(
+    (result: PaymentReturn | null) => {
+      setCheckoutUrl(null);
+      queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      if (result) {
+        Alert.alert(
+          "Payment received",
+          "We're confirming your payment. Your wallet will be credited automatically.",
+        );
+      }
+    },
+    [queryClient],
+  );
 
   const handleFundWallet = async () => {
     const parsed = Number(amount);
@@ -93,12 +115,9 @@ export default function WalletScreen() {
       });
 
       if (result?.data?.redirectUrl) {
-        // The checkout sheet has closed. The webhook completes the deposit,
-        // so the balance may land a moment later.
-        Alert.alert(
-          "Complete your payment",
-          "Finish the payment in the browser, then your wallet will be credited automatically.",
-        );
+        // Render the gateway's checkout in-app (8.k.i) instead of handing the
+        // payer to the OS browser.
+        setCheckoutUrl(result.data.redirectUrl);
       } else {
         Alert.alert(
           "Payment started",
@@ -218,12 +237,12 @@ export default function WalletScreen() {
                     marginTop: Spacing.md,
                   }}
                 >
-                  You will be redirected to{" "}
+                  You will complete the payment by mobile money with{" "}
                   {country.paymentGateway.provider === "flutterwave"
                     ? "Flutterwave"
                     : "Korapay"}{" "}
-                  to complete the payment by mobile money. Your wallet is
-                  credited automatically once the payment is confirmed.
+                  without leaving the app. Your wallet is credited
+                  automatically once the payment is confirmed.
                 </Text>
 
                 <Button
@@ -534,6 +553,15 @@ export default function WalletScreen() {
           {/* Bottom Padding */}
           <View style={{ height: Spacing.xl }} />
         </ScrollView>
+
+        {/* In-app gateway checkout (8.k.i). Keeps the payer inside the app
+            instead of opening the OS browser. */}
+        <PaymentWebView
+          visible={checkoutUrl !== null}
+          url={checkoutUrl}
+          title="Complete payment"
+          onClose={handleCheckoutClose}
+        />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
