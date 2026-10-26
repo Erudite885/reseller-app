@@ -76,6 +76,20 @@ serves both roles). Mobile `tsc --noEmit` = 0. **The fix reaches a device in the
 next APK build** — the edge function is already deployed, so a rebuild is all
 that is needed.
 
+**Task 8, 8.k — gateway checkout now opens inside the app (2026-10-26):** the
+fund-account/wallet flow used to hand the Korapay/Flutterwave checkout URL to
+`WebBrowser.openBrowserAsync`, which opened a Chrome Custom Tab / Safari sheet —
+the payer left the app. NG was unaffected (its xixapay gateway issues a virtual
+account and never redirects), but every other country was routed out. The
+checkout now renders in an in-app `Modal` + `WebView`
+(`components/PaymentWebView.tsx`), and `constants/paymentReturn.ts` watches for
+the gateway's redirect back to the app's own `/api/payment/callback` to close the
+sheet and refresh the wallet. `react-native-webview` was already a dependency, so
+no new native module. Verified with `scripts/verify-payment-return.mjs` (27/27),
+`tsc --noEmit` = 0, lint unchanged. Shipped as mobile `main` `814b0fd`; the four
+test-store APKs were rebuilt and proven to carry the change. See the master
+handover for the full entry.
+
 **Task 1 — Supabase direct DB dump:** OPEN. The direct `pg_dump`
 command block and the wrapper script (`scripts/supabase_dump.sh`) both
 live in the web repo's `HANDOVER.md`, since the dump is backend-wide,
