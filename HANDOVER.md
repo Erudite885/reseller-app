@@ -58,6 +58,17 @@ duplicated per repo.
 This repo is on `handover/supabase-dump`, matching the branch name used
 in the web repo, so the two can be checked out side by side.
 
+> **Standing policy (2026-10-26) — merge to `main` after every update.**
+> Everything is live now on both the web and this mobile app, so do **not**
+> leave work resting on `handover/supabase-dump`: push the branch, then merge
+> it into `main` and push `main` in the **same session**, in **both** repos,
+> keeping the two refs identical. The full policy (with the commands and the
+> fast-forward check) is in the master handover, section **"Standing policy —
+> after every `handover/supabase-dump` update, merge to `main`"** in
+> `Edges_LandingPage/HANDOVER.md`. The old "dispatch with
+> `--ref handover/supabase-dump`" workaround is obsolete — dispatch from
+> `main`.
+
 ## Current status (mirror only — see master for full detail)
 
 **Task 8, 8.i — store owner login (2026-10-24):** the owner can now sign in on
