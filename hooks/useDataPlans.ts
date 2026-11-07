@@ -21,9 +21,6 @@ export interface StorePlan {
   country_code: string;
 }
 
-/** A data plan. Retained as an alias so existing imports keep working. */
-export type DataPlan = StorePlan;
-
 /**
  * Customer storefront catalog, read through the global-store-catalog edge
  * function. The function resolves the store's country from
@@ -109,27 +106,6 @@ export function usePlansForDestination(
         (p) => p.country_code === cc && p.category === cat,
       )
     : [];
-
-  return { data: plans, isLoading, refetch };
-}
-
-/**
- * Plans for a single network in a destination country and category.
- *
- * Kept for the existing per-network call sites. `network` is matched
- * case-insensitively; an empty network returns every plan for the destination.
- */
-export function useDataPlansByNetwork(
-  network: string,
-  country?: string | null,
-  category: "data" | "airtime" = "data",
-) {
-  const { data, isLoading, refetch } = usePlansForDestination(country, category);
-
-  if (!network) return { data, isLoading, refetch };
-
-  const target = network.toUpperCase();
-  const plans = data.filter((p) => (p.network ?? "").toUpperCase() === target);
 
   return { data: plans, isLoading, refetch };
 }
