@@ -1421,6 +1421,7 @@ export default function HomeScreen() {
             }
             disabled={
               !phoneNumber ||
+              (hasEnoughDigits && detecting) ||
               destinationPlans.length === 0 ||
               (serviceType === "data" ? !selectedPlanId : !amount) ||
               isProcessing ||
