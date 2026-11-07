@@ -394,6 +394,20 @@ export function getCountryConfig(code: string | null | undefined): CountryConfig
 }
 
 /**
+ * Config for a destination country the customer typed a number for. Uses the
+ * shipped config when the country has one; otherwise falls back to the store's
+ * own config, so validation and the dial code still work for a country the app
+ * ships no presentation config for. Prices are always the store's currency, so
+ * the fallback's currency/symbol is the right one to show.
+ */
+export function getDestinationConfig(
+  code: string | null | undefined,
+  fallback: CountryConfig,
+): CountryConfig {
+  return COUNTRIES[(code || "").toLowerCase()] || fallback;
+}
+
+/**
  * Airtime quick-select denominations for a country's currency. The global_*
  * catalog defines the real denominations; these are the common presets shown
  * before the user types an amount. High-inflation currencies (XAF/XOF, RWF,

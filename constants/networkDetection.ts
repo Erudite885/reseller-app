@@ -82,6 +82,52 @@ export function detectNetwork(
 }
 
 /**
+ * National digits for a country, from any form the customer may type.
+ *
+ * The customer may know the number as "+2348036076543", "2348036076543",
+ * "08036076543" or "8036076543"; all four must reduce to the same national
+ * digits ("8036076543") - the form the provider and the purchase expect. A
+ * leading trunk `0` and a dial code already on the front are removed, and a
+ * leading `0` is never kept, so the same input resolves identically for the
+ * store's country and for a cross-border destination.
+ *
+ * Mirrors the web's `_shared/phone/normalize.ts` `toNationalDigits`, so the two
+ * clients send the provider the same subscriber.
+ */
+export function toNationalDigits(input: string, dialCode: string): string {
+  const dial = (dialCode || "").replace(/\D/g, "");
+  const raw = (input || "").trim();
+  const digits = digitsOnly(raw);
+  if (raw.startsWith("+") || raw.startsWith("00")) {
+    const stripped = raw.startsWith("00") ? digits.slice(2) : digits;
+    return dial && stripped.startsWith(dial)
+      ? stripped.slice(dial.length)
+      : stripped;
+  }
+  if (dial && !digits.startsWith("0") && digits.startsWith(dial)) {
+    return digits.slice(dial.length);
+  }
+  return digits.replace(/^0+/, "");
+}
+
+/**
+ * Whether a typed number is a complete mobile number for the country whose
+ * dial code and digit bounds are supplied. Used for a cross-border destination
+ * as well as the store's own country, so a Rwandan store selling a Ugandan
+ * bundle accepts a 9-digit UG number.
+ */
+export function isValidDestinationPhone(
+  input: string,
+  dialCode: string,
+  config: { minDigits: number; maxDigits: number },
+): boolean {
+  const national = toNationalDigits(input, dialCode);
+  return (
+    national.length >= config.minDigits && national.length <= config.maxDigits
+  );
+}
+
+/**
  * Whether a typed number is a complete local mobile number for its country.
  *
  * `config` counts the national significant number (without the trunk). When the

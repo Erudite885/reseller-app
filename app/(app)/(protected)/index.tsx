@@ -6,15 +6,17 @@ import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getNetworkColorLight, getNetworkImage } from "@/constants/helpers";
 import {
   detectNetwork,
-  getNationalTrunk,
-  isValidNationalPhoneNumber,
+  isValidDestinationPhone,
+  toNationalDigits,
   MIN_DETECT_DIGITS,
 } from "@/constants/networkDetection";
 import {
   getCountryConfig,
+  getDestinationConfig,
   getQuickAmounts,
 } from "@/constants/countryConfig";
-import { useDataPlansByNetwork } from "@/hooks/useDataPlans";
+import { usePlansForDestination, useStoreCatalog } from "@/hooks/useDataPlans";
+import { lookupNetwork } from "@/hooks/useNetworkLookup";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useProfile } from "@/hooks/useProfiles";
 import {
@@ -43,6 +45,55 @@ import {
   Text,
   View,
 } from "react-native";
+
+/** A small centered notice card for an airtime empty/blocked state. */
+function AirtimeNotice({
+  colors,
+  message,
+  actionLabel,
+  onAction,
+}: {
+  colors: any;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View
+      style={{
+        marginHorizontal: Spacing.lg,
+        marginBottom: Spacing.lg,
+        backgroundColor: colors.card,
+        borderRadius: Radius.md,
+        padding: Spacing.xl,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={{ fontSize: 48, marginBottom: Spacing.sm }}>📞</Text>
+      <Text
+        style={{
+          fontSize: Typography.sizes.base,
+          color: colors.textSecondary,
+          textAlign: "center",
+        }}
+      >
+        {message}
+      </Text>
+      {actionLabel && onAction && (
+        <View style={{ marginTop: Spacing.md }}>
+          <Button
+            title={actionLabel}
+            onPress={onAction}
+            variant="primary"
+            size="sm"
+          />
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const { colors, shadows } = useTheme();
@@ -95,43 +146,135 @@ export default function HomeScreen() {
   // yet (the web modal shows the same fallback).
   const isVirtualAccountCountry = country.paymentGateway.provider === "xixapay";
 
-  // Fetch data plans for selected network
-  const { data: dataPlans = [], isLoading: isDataPlansLoading } =
-    useDataPlansByNetwork(network);
+  // The store's own country config (currency, funding gateway) and the
+  // destination the typed number resolves to. `destination` drives validation
+  // and the plan filter; `country` still drives currency and funding.
+  const [destinationCountry, setDestinationCountry] = useState("");
+  const [detecting, setDetecting] = useState(false);
+
+  // The whole store catalog (data + airtime, every destination country). Its
+  // country list is the `preferred` hint for the lookup, and it answers "does
+  // this store carry plans for the detected country", so the empty states can
+  // point the customer at the service type that does have plans.
+  const { data: catalog } = useStoreCatalog();
+  const preferredCountries = React.useMemo(
+    () => [
+      ...new Set((catalog?.plans ?? []).map((p) => p.country_code).filter(Boolean)),
+    ],
+    [catalog],
+  );
+
+  // The country a plan is actually delivered to: the destination the number
+  // resolved to, else the store's own country (so the store's local plans show
+  // before a number is typed, exactly as before).
+  const destination = destinationCountry || (countryCode || "").toLowerCase();
+  const destinationConfig = getDestinationConfig(destination, country);
+
+  // The plans the store sells for that destination and the chosen service.
+  const { data: destinationPlans = [], isLoading: isPlansLoading } =
+    usePlansForDestination(destination, serviceType);
+
+  // The plans for the detected network within the destination, and the set of
+  // networks that country's plans use. When the detected carrier is not one the
+  // store sells for that country (a brand it does not carry), fall back to every
+  // plan for the destination rather than showing nothing.
+  const effectiveNetwork = React.useMemo(
+    () =>
+      network &&
+      destinationPlans.some(
+        (p) => (p.network ?? "").toUpperCase() === network.toUpperCase(),
+      )
+        ? network
+        : "",
+    [network, destinationPlans],
+  );
+  const networkPlans = React.useMemo(
+    () =>
+      effectiveNetwork
+        ? destinationPlans.filter(
+            (p) =>
+              (p.network ?? "").toUpperCase() === effectiveNetwork.toUpperCase(),
+          )
+        : destinationPlans,
+    [destinationPlans, effectiveNetwork],
+  );
+  const otherServiceAvailable = React.useMemo(() => {
+    const other = serviceType === "data" ? "airtime" : "data";
+    return (catalog?.plans ?? []).some(
+      (p) => p.country_code === destination && p.category === other,
+    );
+  }, [catalog, destination, serviceType]);
+
+  // Whether the customer has typed enough of a number to resolve a country.
+  const phoneDigits = phoneNumber.replace(/\D/g, "");
+  const hasEnoughDigits = phoneDigits.length >= MIN_DETECT_DIGITS;
+  // True when the resolved destination is not the store's own country, so the
+  // header can say which country the number belongs to.
+  const isCrossBorder =
+    !!destinationCountry &&
+    destinationCountry !== (countryCode || "").toLowerCase();
 
   // Purchase hooks
   const purchaseDataMutation = usePurchaseData();
   const purchaseAirtimeMutation = usePurchaseAirtime();
 
-  // Resolve the network from the typed number for every country: the first
-  // MIN_DETECT_DIGITS digits identify the operator, and the plans shown are
-  // whatever that network sells in this store. There is no manual picker -
-  // the number is the only input. Detection matches the number as typed, trunk
-  // `0` included, so it fires once the user has typed that much of a real
-  // number. setState bails out when the value is unchanged, so this settles
-  // after one pass.
+  // Resolve the country and carrier from the typed number, for every country
+  // the platform covers - not just the store's own. The number's own country
+  // decides the destination, so a Rwandan store can sell a Ugandan bundle; the
+  // store's country and its catalog only break ties for an ambiguous local
+  // number. There is no manual picker: the number is the only input. Debounced
+  // and async (the lookup is an edge-function call), and it re-runs on every
+  // keystroke so a number settles as it is typed.
   useEffect(() => {
-    const detected =
-      phoneNumber.length >= MIN_DETECT_DIGITS
-        ? detectNetwork(phoneNumber, countryCode)
-        : null;
-
-    if (detected) {
-      setNetwork(detected);
-    } else {
+    const digits = phoneNumber.replace(/\D/g, "");
+    if (digits.length < MIN_DETECT_DIGITS) {
+      setDetecting(false);
+      setDestinationCountry("");
       setNetwork("");
+      setSelectedPlanId(null);
+      return;
     }
-    setSelectedPlanId(null);
-  }, [phoneNumber, countryCode]);
+
+    let cancelled = false;
+    setDetecting(true);
+    const timer = setTimeout(async () => {
+      const found = await lookupNetwork(
+        phoneNumber,
+        countryCode,
+        preferredCountries,
+      );
+      if (cancelled) return;
+      setDetecting(false);
+
+      const resolvedCountry = found?.country?.toLowerCase() || "";
+      setDestinationCountry(resolvedCountry);
+
+      // The country comes from the edge function (so a store can sell a
+      // destination it never enabled). The network is refined by the local
+      // prefix table when the number is in the destination's local dialed
+      // form, because that table is per-carrier for every shipped country while
+      // the function's brand is a country default outside Nigeria. Falls back
+      // to the function's brand when the table cannot place the number (e.g. an
+      // international form, or a country with no table).
+      const localNetwork = resolvedCountry
+        ? detectNetwork(phoneNumber, resolvedCountry)
+        : null;
+      setNetwork(localNetwork || found?.network || "");
+      setSelectedPlanId(null);
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [phoneNumber, countryCode, preferredCountries]);
 
   const handlePhoneChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
-    // Cap at the national significant number plus the trunk the user dials, so
-    // a Nigerian number can hold its `0` (11 digits) while a Benin number - no
-    // trunk - is capped at 10. Matches the web storefront and what the
-    // providers expect.
-    const limit = country.phoneNumber.maxDigits + getNationalTrunk(countryCode).length;
-    setPhoneNumber(cleaned.substring(0, limit));
+    // Accept an optional leading "+" and digits, so the customer can type the
+    // international form ("+256...") as well as the local one. Capped at the
+    // E.164 maximum so any country's full number fits.
+    const cleaned = text.replace(/[^0-9+]/g, "").replace(/(?!^)\+/g, "");
+    setPhoneNumber(cleaned.substring(0, 16));
   };
 
   const onRefresh = async () => {
@@ -147,7 +290,7 @@ export default function HomeScreen() {
     setToastVisible(true);
   };
 
-  const selectedPlan = dataPlans.find(
+  const selectedPlan = networkPlans.find(
     (plan) => plan.plan_id === selectedPlanId,
   );
 
@@ -191,20 +334,23 @@ export default function HomeScreen() {
       return;
     }
 
-    // countryConfig.phoneNumber is the source of truth for a valid local
-    // number length (the input is capped at maxDigits + 1 as it is typed, to
-    // leave room for the trunk `0`). Validation removes the country's own
-    // trunk prefix and measures the national significant number, so a Nigerian
-    // `0803...` passes while the trunkless `803...` does not.
+    // Cross-border: the number's own country decides what a valid number looks
+    // like (a Rwandan store selling a Ugandan bundle must accept a 9-digit UG
+    // number, not a 9-digit RW-shaped rule). The customer may type the number as
+    // "+256712345678", "256712345678", "0712345678" or "712345678"; all reduce
+    // to the national digits the provider expects, so the format typed cannot
+    // decide whether the purchase succeeds.
+    const destDialCode = destinationConfig.phoneCode.replace(/\D/g, "");
+    const nationalPhone = toNationalDigits(phoneNumber, destDialCode);
     if (
-      !isValidNationalPhoneNumber(
+      !isValidDestinationPhone(
         phoneNumber,
-        country.phoneNumber,
-        countryCode,
+        destDialCode,
+        destinationConfig.phoneNumber,
       )
     ) {
       showToast(
-        `Enter a valid ${country.name} phone number (${country.phoneNumber.minDigits} digits).`,
+        `Enter a valid ${destinationConfig.name} phone number (${destinationConfig.phoneNumber.minDigits} digits).`,
         "error",
       );
       return;
@@ -260,7 +406,7 @@ export default function HomeScreen() {
 
         const result = await purchaseDataMutation.mutateAsync({
           plan_id: selectedPlan.plan_id,
-          phoneNumber: phoneNumber,
+          phoneNumber: nationalPhone,
           transactionPin: transactionPin,
         });
 
@@ -286,9 +432,10 @@ export default function HomeScreen() {
         }
       } else {
         const result = await purchaseAirtimeMutation.mutateAsync({
-          phoneNumber: phoneNumber,
+          phoneNumber: nationalPhone,
           amount: purchaseAmount,
           transactionPin: transactionPin,
+          country: destination,
         });
 
         if (result.success) {
@@ -939,7 +1086,25 @@ export default function HomeScreen() {
             >
               Select Data Plan
             </Text>
-            {network ? (
+            {hasEnoughDigits && detecting ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingVertical: Spacing.lg,
+                }}
+              >
+                <ActivityIndicator color={colors.primary} />
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                    marginTop: Spacing.md,
+                  }}
+                >
+                  Detecting country...
+                </Text>
+              </View>
+            ) : networkPlans.length > 0 ? (
               <>
                 <View style={{ paddingHorizontal: Spacing.md }}>
                   <View
@@ -947,25 +1112,28 @@ export default function HomeScreen() {
                       flexDirection: "row",
                       alignItems: "center",
                       marginBottom: Spacing.md,
-                      backgroundColor: getNetworkColorLight(network),
+                      backgroundColor: getNetworkColorLight(effectiveNetwork),
                       paddingHorizontal: Spacing.md,
                       paddingVertical: Spacing.sm,
                       borderRadius: Radius.full,
                       alignSelf: "flex-start",
                     }}
                   >
-                    {getNetworkImage(network.toLowerCase()) && (
-                      <Image
-                        source={getNetworkImage(network.toLowerCase())!}
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: Radius.full,
-                          marginRight: Spacing.xs,
-                        }}
-                        resizeMode="contain"
-                      />
-                    )}
+                    {effectiveNetwork &&
+                      getNetworkImage(effectiveNetwork.toLowerCase()) && (
+                        <Image
+                          source={
+                            getNetworkImage(effectiveNetwork.toLowerCase())!
+                          }
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: Radius.full,
+                            marginRight: Spacing.xs,
+                          }}
+                          resizeMode="contain"
+                        />
+                      )}
                     <Text
                       style={{
                         fontSize: Typography.sizes.sm,
@@ -974,58 +1142,43 @@ export default function HomeScreen() {
                         textTransform: "uppercase",
                       }}
                     >
-                      {network} Plans
+                      {effectiveNetwork ? `${effectiveNetwork} Plans` : "Plans"}
+                      {isCrossBorder
+                        ? ` · ${destinationConfig.name}`
+                        : ""}
                     </Text>
                   </View>
                 </View>
 
-                {isDataPlansLoading ? (
-                  <View
-                    style={{
-                      alignItems: "center",
-                      paddingVertical: Spacing.lg,
-                    }}
-                  >
-                    <ActivityIndicator color={colors.primary} />
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.sm,
-                        color: colors.textSecondary,
-                        marginTop: Spacing.md,
-                      }}
-                    >
-                      Loading plans...
-                    </Text>
-                  </View>
-                ) : dataPlans.length > 0 ? (
-                  <PlanCarousel
-                    plans={dataPlans}
-                    selectedPlanId={selectedPlanId}
-                    onSelectPlan={(planId) => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      setSelectedPlanId(planId);
-                    }}
-                    colors={colors}
-                    shadows={shadows}
-                  />
-                ) : (
-                  <View
-                    style={{
-                      alignItems: "center",
-                      paddingVertical: Spacing.lg,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: Typography.sizes.base,
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      No plans available
-                    </Text>
-                  </View>
-                )}
+                <PlanCarousel
+                  plans={networkPlans}
+                  selectedPlanId={selectedPlanId}
+                  onSelectPlan={(planId) => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setSelectedPlanId(planId);
+                  }}
+                  colors={colors}
+                  shadows={shadows}
+                />
               </>
+            ) : isPlansLoading ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingVertical: Spacing.lg,
+                }}
+              >
+                <ActivityIndicator color={colors.primary} />
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                    marginTop: Spacing.md,
+                  }}
+                >
+                  Loading plans...
+                </Text>
+              </View>
             ) : (
               <View
                 style={{
@@ -1040,17 +1193,74 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 48, marginBottom: Spacing.sm }}>
                   📱
                 </Text>
-                <Text
-                  style={{
-                    fontSize: Typography.sizes.base,
-                    color: colors.textSecondary,
-                    textAlign: "center",
-                  }}
-                >
-                  {phoneNumber.length < MIN_DETECT_DIGITS
-                    ? `Enter the first ${MIN_DETECT_DIGITS} digits of your ${country.name} phone number to see the plans for your network`
-                    : `We could not identify a network for that number. Please check the ${country.name} number you entered.`}
-                </Text>
+                {!hasEnoughDigits ? (
+                  <Text
+                    style={{
+                      fontSize: Typography.sizes.base,
+                      color: colors.textSecondary,
+                      textAlign: "center",
+                    }}
+                  >
+                    {`Enter the first ${MIN_DETECT_DIGITS} digits of the recipient's phone number to see the data plans for that number.`}
+                  </Text>
+                ) : !network ? (
+                  <Text
+                    style={{
+                      fontSize: Typography.sizes.base,
+                      color: colors.textSecondary,
+                      textAlign: "center",
+                    }}
+                  >
+                    {`We could not identify a network for that number. Please check the number you entered.`}
+                  </Text>
+                ) : otherServiceAvailable ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.base,
+                        fontWeight: Typography.weights.semibold,
+                        color: colors.text,
+                        textAlign: "center",
+                      }}
+                    >
+                      {`No data bundles for this number.`}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: Typography.sizes.sm,
+                        color: colors.textSecondary,
+                        textAlign: "center",
+                        marginTop: Spacing.xs,
+                        marginBottom: Spacing.md,
+                      }}
+                    >
+                      Try airtime instead.
+                    </Text>
+                    <Button
+                      title="View Airtime"
+                      onPress={() => {
+                        Haptics.impactAsync(
+                          Haptics.ImpactFeedbackStyle.Light,
+                        );
+                        setServiceType("airtime");
+                        setSelectedPlanId(null);
+                        setAmount("");
+                      }}
+                      variant="primary"
+                      size="sm"
+                    />
+                  </>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: Typography.sizes.base,
+                      color: colors.textSecondary,
+                      textAlign: "center",
+                    }}
+                  >
+                    {`No plans available for this number right now.`}
+                  </Text>
+                )}
               </View>
             )}
           </View>
@@ -1129,6 +1339,40 @@ export default function HomeScreen() {
                 ))}
               </View>
             </View>
+
+            {/* Airtime is a fixed-denomination catalog: the entered amount must
+                match a denomination the store sells for the destination
+                country, and the empty state says so rather than letting the
+                purchase fail at the server. */}
+            {!hasEnoughDigits ? (
+              <AirtimeNotice
+                colors={colors}
+                message={`Enter the first ${MIN_DETECT_DIGITS} digits of the recipient's phone number to buy airtime.`}
+              />
+            ) : !network ? (
+              <AirtimeNotice
+                colors={colors}
+                message="We could not identify a network for that number. Please check the number you entered."
+              />
+            ) : destinationPlans.length === 0 ? (
+              otherServiceAvailable ? (
+                <AirtimeNotice
+                  colors={colors}
+                  message="No airtime for this number. Try data bundles instead."
+                  actionLabel="View Data Bundles"
+                  onAction={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setServiceType("data");
+                    setAmount("");
+                  }}
+                />
+              ) : (
+                <AirtimeNotice
+                  colors={colors}
+                  message="No airtime available for this number right now."
+                />
+              )
+            ) : null}
           </>
         )}
 
@@ -1176,8 +1420,8 @@ export default function HomeScreen() {
               purchaseAirtimeMutation.isPending
             }
             disabled={
-              !network ||
               !phoneNumber ||
+              destinationPlans.length === 0 ||
               (serviceType === "data" ? !selectedPlanId : !amount) ||
               isProcessing ||
               purchaseDataMutation.isPending ||

@@ -71,6 +71,44 @@ in the web repo, so the two can be checked out side by side.
 
 ## Current status (mirror only — see master for full detail)
 
+**Phase 2 — cross-border phone detection in the mobile app (2026-11-07):** the
+mobile app's phone input now resolves a number's own country, so a reseller's
+customer can enter a number from another country and buy data or airtime for it
+— matching the web storefront's Phase 2 behaviour. Previously detection was
+store-country-only: the app ran `detectNetwork(phoneNumber, storeCountry)` against
+a local prefix table, so a Rwandan store could never see a Ugandan number as
+Ugandan and no cross-border plan could be shown or bought.
+
+- **Detection** now calls the same deployed `global-network-lookup` edge function
+  the web uses (new `hooks/useNetworkLookup.ts`), so the two clients agree on a
+  number's country. The number's own country decides the destination; the store's
+  country and its catalog countries are only tie-breaks for an ambiguous local
+  number. The lookup is anonymous (the function is `verify_jwt=false`), debounced
+  400 ms, and falls back to the local prefix table for the store's own country
+  when the function is unreachable.
+- **Carrier**: the edge function's brand is a country default outside Nigeria, so
+  the app refines the carrier with its own per-carrier prefix table when the
+  number is in the destination's local dialed form (`detectNetwork(number,
+  destination)`), falling back to the function's brand otherwise.
+- **Catalog** (`hooks/useDataPlans.ts`) now fetches every enabled plan with its
+  `country_code` and `category` (was `category: "data"` only) and filters by the
+  detected destination and the selected service (`usePlansForDestination`).
+- **Validation and submission** use the destination country's own bounds and dial
+  code (`toNationalDigits` + `isValidDestinationPhone`), so a 9-digit UG number
+  passes at a RW store, and every typed form (`+256…`, `256…`, `0712…`, `712…`)
+  reduces to the national digits the provider expects. Airtime denominations are
+  scoped to the destination country.
+- **UI is unchanged** apart from the phone-input behaviour and the empty states:
+  Data is already the default service (8.j), the network chip, plan carousel and
+  wallet card render as before, and a cross-border destination shows the country
+  name beside the network. An airtime destination with no denominations offers
+  "View Data Bundles" (and the mirror for data), matching the web.
+- **Verified:** `tsc --noEmit` = 0; `expo lint` unchanged at **42 problems
+  (12 errors)**, none in a touched file; `scripts/verify-network-prefixes.mjs`
+  passes (438 prefixes); a Metro `expo export` bundle succeeds; and unit checks
+  confirm `toNationalDigits`/`isValidDestinationPhone` reduce all four typed
+  forms correctly and reject a number under the wrong country's bounds.
+
 **Task 8, 8.i — store owner login (2026-10-24):** the owner can now sign in on
 mobile. The login screen resolves the typed address to the Supabase Auth
 identity behind it by calling `global-store-customer-auth-email`, and that

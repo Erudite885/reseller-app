@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useResellerStore } from "@/store/resellerStore";
 
-export interface DataPlan {
+export interface StorePlan {
   /** global_base_plans.id (uuid). */
   id: string;
   /**
@@ -12,25 +12,35 @@ export interface DataPlan {
    */
   plan_id: string;
   network: string;
-  plan_type: string;
+  /** "data" or "airtime". */
+  category: string;
   plan_name: string;
   price: number;
   validity?: string;
+  /** The destination country this plan delivers to (lowercase). */
+  country_code: string;
 }
+
+/** A data plan. Retained as an alias so existing imports keep working. */
+export type DataPlan = StorePlan;
 
 /**
  * Customer storefront catalog, read through the global-store-catalog edge
  * function. The function resolves the store's country from
- * global_reseller_applications (never from us), prices plans exactly like
- * the purchase flow, and returns only storefront fields - base cost and
- * markup never leave the server. This replaces the legacy direct read of
- * resellers x reseller_plan_configs x reseller_base_plans, which was
- * Nigeria-only and required a store-name lookup.
+ * global_reseller_applications (never from us) for pricing, and returns only
+ * storefront fields - base cost and markup never leave the server. This
+ * replaces the legacy direct read of resellers x reseller_plan_configs x
+ * reseller_base_plans, which was Nigeria-only and required a store-name lookup.
+ *
+ * Phase 2 cross-border: the catalog is NOT scoped to the store's own country.
+ * A reseller sells any country the platform covers, priced in the store's own
+ * currency, so every enabled plan is returned with its destination
+ * `country_code` and the caller filters by the country the typed number
+ * resolves to. Both categories ("data" and "airtime") are fetched, so the
+ * customer can switch service type without a second round trip.
  *
  * resellerId comes from the build config (see store/resellerStore.ts); the
  * app never needs to resolve it at runtime.
- *
- * Returns every plan for the store plus the store's own `networks` list.
  */
 export function useStoreCatalog() {
   const resellerId = useResellerStore.getState().config.resellerId;
@@ -39,14 +49,14 @@ export function useStoreCatalog() {
     queryKey: ["store_catalog", resellerId],
     queryFn: async () => {
       if (!resellerId) {
-        return { plans: [] as DataPlan[], networks: [] as string[] };
+        return { plans: [] as StorePlan[], networks: [] as string[] };
       }
 
-      // Only "data" plans exist so far; the function returns every category
-      // when none is passed.
+      // No category: the function returns every enabled plan (data + airtime),
+      // each tagged with its own category and destination country.
       const { data, error } = await supabase.functions.invoke(
         "global-store-catalog",
-        { body: { resellerId, category: "data" } },
+        { body: { resellerId } },
       );
 
       if (error) {
@@ -54,14 +64,15 @@ export function useStoreCatalog() {
         throw error;
       }
 
-      const plans: DataPlan[] = (data?.plans ?? []).map((p: any) => ({
+      const plans: StorePlan[] = (data?.plans ?? []).map((p: any) => ({
         id: p.id,
         plan_id: p.plan_id,
         network: p.network ?? "",
-        plan_type: p.category ?? "",
+        category: (p.category ?? "").toLowerCase(),
         plan_name: p.name,
         validity: p.validity,
         price: p.price,
+        country_code: (p.country_code ?? "").toLowerCase(),
       }));
 
       // Sort by price ascending, as the legacy read did.
@@ -77,15 +88,48 @@ export function useStoreCatalog() {
   });
 }
 
-export function useDataPlansByNetwork(network: string) {
+/**
+ * Every plan the store sells for a destination country and a service type.
+ *
+ * `country` is the country the typed number resolved to (see
+ * hooks/useNetworkLookup.ts). A plan for a country the store never enabled is
+ * simply absent from the catalog - the catalog is the store's opt-in set - so
+ * an empty result is the correct answer for an unsupported destination.
+ */
+export function usePlansForDestination(
+  country: string | null | undefined,
+  category: "data" | "airtime",
+) {
   const { data, isLoading, refetch } = useStoreCatalog();
 
+  const cc = (country || "").toLowerCase();
+  const cat = category.toLowerCase();
+  const plans = cc
+    ? (data?.plans ?? []).filter(
+        (p) => p.country_code === cc && p.category === cat,
+      )
+    : [];
+
+  return { data: plans, isLoading, refetch };
+}
+
+/**
+ * Plans for a single network in a destination country and category.
+ *
+ * Kept for the existing per-network call sites. `network` is matched
+ * case-insensitively; an empty network returns every plan for the destination.
+ */
+export function useDataPlansByNetwork(
+  network: string,
+  country?: string | null,
+  category: "data" | "airtime" = "data",
+) {
+  const { data, isLoading, refetch } = usePlansForDestination(country, category);
+
+  if (!network) return { data, isLoading, refetch };
+
   const target = network.toUpperCase();
-  const plans = (data?.plans ?? []).filter(
-    (p) =>
-      (p.network ?? "").toUpperCase() === target ||
-      (p.plan_type ?? "").toUpperCase() === target,
-  );
+  const plans = data.filter((p) => (p.network ?? "").toUpperCase() === target);
 
   return { data: plans, isLoading, refetch };
 }

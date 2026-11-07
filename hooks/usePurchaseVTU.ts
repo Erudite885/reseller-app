@@ -44,7 +44,7 @@ async function callPurchaseFunction(
   return result;
 }
 
-/** The store's airtime denominations (from the catalog). */
+/** The store's airtime denominations (from the catalog), for every country. */
 export function useAirtimePlans() {
   const { user } = useAuthStore();
   const resellerId = useResellerStore.getState().config.resellerId;
@@ -62,6 +62,7 @@ export function useAirtimePlans() {
         network: p.network ?? "",
         name: p.name,
         price: p.price,
+        country_code: (p.country_code ?? "").toLowerCase(),
       }));
     },
     enabled: !!resellerId,
@@ -105,11 +106,20 @@ export function usePurchaseAirtime() {
       phoneNumber: string;
       amount: number;
       transactionPin: string;
+      /**
+       * The destination country the typed number resolved to. Scopes the
+       * amount to that country's airtime denominations, since two countries
+       * can share a price by coincidence.
+       */
+      country?: string;
     }) => {
       if (!user?.id) throw new Error("No user");
 
+      const cc = (purchaseData.country || "").toLowerCase();
       const match = (airtimePlans ?? []).find(
-        (p) => Number(p.price) === Number(purchaseData.amount),
+        (p) =>
+          Number(p.price) === Number(purchaseData.amount) &&
+          (!cc || p.country_code === cc),
       );
       if (!match) {
         throw new Error(
