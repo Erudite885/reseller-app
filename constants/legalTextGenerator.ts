@@ -51,13 +51,13 @@ Your information is used to:
 • Provide responsive customer support
 
 5. Payments and Financial Security
-All payments are processed securely through PalmPay.
+All payments are processed securely by our banking partners.
 ${reseller.store_name} does not store any card or bank details.
 A 10% processing fee applies to all deposits.
 
 6. Third-Party Integrations
 Our app integrates with:
-• PalmPay - Payment processing
+• Payment providers - Payment processing
 • Data API providers - For mobile data delivery
 Each service operates under its own privacy policy.
 
@@ -106,7 +106,7 @@ By using our platform, you confirm that:
 
 3. Services
 ${reseller.store_name} provides mobile data bundles via our app.
-• Payments are processed via PalmPay
+• Payments are processed by our banking partners
 • A 10% processing fee applies to deposits
 
 4. Account Registration
@@ -135,7 +135,7 @@ You agree not to:
 
 8. Third-Party Services
 We integrate with:
-• PalmPay - Payment processing
+• Payment providers - Payment processing
 • Telecom APIs - Data delivery
 Each operates under its own terms.
 
