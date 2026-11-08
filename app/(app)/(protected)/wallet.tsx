@@ -3,6 +3,7 @@ import { Button, Card, Input } from "@/components/ui";
 import { PaymentWebView, type PaymentReturn } from "@/components/PaymentWebView";
 import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getCountryConfig } from "@/constants/countryConfig";
+import { isValidDestinationPhone, toMsisdn } from "@/constants/networkDetection";
 import { useFundWallet } from "@/hooks/useFundWallet";
 import { useProfile } from "@/hooks/useProfiles";
 import { useTheme } from "@/hooks/useTheme";
@@ -90,14 +91,11 @@ export default function WalletScreen() {
     }
 
     if (needsMobileNumber) {
-      const digits = mobileNumber.replace(/\D/g, "");
-      if (
-        digits.length < country.phoneNumber.minDigits ||
-        digits.length > country.phoneNumber.maxDigits
-      ) {
+      if (!isValidDestinationPhone(mobileNumber, country.phoneCode, country.phoneNumber)) {
         Alert.alert(
           "Check the number",
-          `Enter a ${country.name} mobile money number (${country.phoneNumber.minDigits}-${country.phoneNumber.maxDigits} digits).`,
+          `Enter a valid ${country.name} mobile money number. ` +
+            `You can include the country code (${country.phoneCode}) or just type the local number.`,
         );
         return;
       }
@@ -110,7 +108,7 @@ export default function WalletScreen() {
       const result = await fundWalletMutation.mutateAsync({
         amount: parsed,
         mobileMoney: needsMobileNumber
-          ? { number: mobileNumber.replace(/\D/g, "") }
+          ? { number: toMsisdn(mobileNumber, country.phoneCode) }
           : undefined,
       });
 
@@ -225,7 +223,7 @@ export default function WalletScreen() {
                     onChangeText={setMobileNumber}
                     editable={!isProcessing}
                     containerStyle={{ marginTop: Spacing.lg }}
-                    helperText={`${country.phoneNumber.minDigits}-${country.phoneNumber.maxDigits} digits`}
+                    helperText={`Include the country code (${country.phoneCode}) or type the local number`}
                   />
                 )}
 

@@ -111,6 +111,24 @@ export function toNationalDigits(input: string, dialCode: string): string {
 }
 
 /**
+ * The country-coded MSISDN ("250788123456") a mobile-money gateway expects,
+ * from any form the payer may type: "+250788123456", "00250788123456",
+ * "250788123456", "0788123456" or "788123456". Returns "" when there is
+ * nothing to normalise.
+ *
+ * Flutterwave's `mobilemoney.phone` is a full international number, not the
+ * local form - which is why the web storefront asks for the country code. The
+ * app instead accepts either form and adds the dial code itself, so a payer
+ * who types their familiar local number is not rejected.
+ */
+export function toMsisdn(input: string, dialCode: string): string {
+  const dial = (dialCode || "").replace(/\D/g, "");
+  const national = toNationalDigits(input, dialCode);
+  if (!national) return "";
+  return dial ? dial + national : national;
+}
+
+/**
  * Whether a typed number is a complete mobile number for the country whose
  * dial code and digit bounds are supplied. Used for a cross-border destination
  * as well as the store's own country, so a Rwandan store selling a Ugandan

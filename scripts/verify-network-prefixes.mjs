@@ -53,7 +53,7 @@ try {
     ),
   );
 
-  const { detectNetwork, isValidNationalPhoneNumber, MIN_DETECT_DIGITS } =
+  const { detectNetwork, isValidNationalPhoneNumber, toMsisdn, MIN_DETECT_DIGITS } =
     await import(entry);
   const { NETWORK_PREFIXES_BY_COUNTRY } = await import(
     join(out, "networkPrefixes.js")
@@ -122,6 +122,34 @@ try {
       isValidNationalPhoneNumber(input, cfg, cc),
       want,
     );
+  }
+
+  // --- MSISDN: every form the payer may type reduces to the same country-coded
+  //     number the mobile-money gateway expects. This is the wallet-funding
+  //     fix - the app used to send the raw digits (9 for Rwanda), which
+  //     Flutterwave rejects because it wants a full international number.
+  const msisdnCases = [
+    // Rwanda (dial 250, 9 national digits).
+    ["0788123456", "+250", "250788123456"],
+    ["788123456", "+250", "250788123456"],
+    ["250788123456", "+250", "250788123456"],
+    ["+250788123456", "+250", "250788123456"],
+    ["00250788123456", "+250", "250788123456"],
+    [" 0788 123 456 ", "+250", "250788123456"],
+    // Nigeria (dial 234, trunk `0`, 10 national digits).
+    ["08036076543", "+234", "2348036076543"],
+    ["8036076543", "+234", "2348036076543"],
+    ["+2348036076543", "+234", "2348036076543"],
+    // Kenya (dial 254).
+    ["0712123456", "+254", "254712123456"],
+    ["+254712123456", "+254", "254712123456"],
+    // Ghana (dial 233).
+    ["0241234567", "+233", "233241234567"],
+    // Nothing to normalise.
+    ["", "+250", ""],
+  ];
+  for (const [input, dial, want] of msisdnCases) {
+    check(`msisdn(${JSON.stringify(input)}, ${dial})`, toMsisdn(input, dial), want);
   }
 
   // --- Invariant: typing any published prefix in full resolves to a network.
