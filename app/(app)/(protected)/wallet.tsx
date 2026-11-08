@@ -196,7 +196,7 @@ export default function WalletScreen() {
                     color: colors.textSecondary,
                   }}
                 >
-                  Fund your wallet in {country.name}
+                  Fund your wallet
                 </Text>
               </View>
 
@@ -235,12 +235,9 @@ export default function WalletScreen() {
                     marginTop: Spacing.md,
                   }}
                 >
-                  You will complete the payment by mobile money with{" "}
-                  {country.paymentGateway.provider === "flutterwave"
-                    ? "Flutterwave"
-                    : "Korapay"}{" "}
-                  without leaving the app. Your wallet is credited
-                  automatically once the payment is confirmed.
+                  You will complete the payment by mobile money without
+                  leaving the app. Your wallet is credited automatically once
+                  the payment is confirmed.
                 </Text>
 
                 <Button
@@ -500,12 +497,9 @@ export default function WalletScreen() {
                     lineHeight: 20,
                   }}
                 >
-                  A virtual account allows you to fund your wallet directly via
-                  bank transfer. We partner with{" "}
-                  <Text style={{ fontWeight: Typography.weights.bold }}>
-                    PalmPay
-                  </Text>{" "}
-                  to provide you with a dedicated account number.
+                  A virtual account allows you to fund your wallet directly by
+                  bank transfer. We provide you with a dedicated account number
+                  to make payments into.
                 </Text>
               </Card>
 
@@ -527,8 +521,7 @@ export default function WalletScreen() {
                   }}
                 >
                   🔒 Your information is secure and encrypted. We only share it
-                  with our banking partners (PalmPay) to create your virtual
-                  account.
+                  with our banking partners to create your virtual account.
                 </Text>
               </Card>
 

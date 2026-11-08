@@ -926,8 +926,7 @@ export default function HomeScreen() {
                       Fund your wallet by{" "}
                       {country.paymentGateway.methods.includes("mobile_money")
                         ? "mobile money"
-                        : "bank transfer"}{" "}
-                      in {country.name}
+                        : "bank transfer"}
                     </Text>
 
                     <Button
