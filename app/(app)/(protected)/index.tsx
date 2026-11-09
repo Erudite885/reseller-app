@@ -364,9 +364,11 @@ export default function HomeScreen() {
       return;
     }
 
-    if (wallet.balance < purchaseAmount) {
+    // The bonus is spendable, so the spendable total is balance + bonus.
+    const spendableBalance = wallet.balance + (wallet.bonus_balance ?? 0);
+    if (spendableBalance < purchaseAmount) {
       showToast(
-        `Insufficient balance. You need ${formatCurrency(purchaseAmount)} but have ${formatCurrency(wallet.balance)}`,
+        `Insufficient balance. You need ${formatCurrency(purchaseAmount)} but have ${formatCurrency(spendableBalance)}`,
         "error",
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -672,6 +674,43 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             </View>
+
+            {/* Non-withdrawable app first-deposit bonus, shown separately
+                from the withdrawable balance. Hidden until one is earned. */}
+            {(wallet?.bonus_balance ?? 0) > 0 && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: colors.primary + "10",
+                  borderRadius: Radius.md,
+                  paddingHorizontal: Spacing.md,
+                  paddingVertical: Spacing.sm,
+                  marginBottom: Spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  🎁 Bonus Balance
+                </Text>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.base,
+                    fontWeight: Typography.weights.bold,
+                    color: colors.primary,
+                  }}
+                >
+                  {showBalance
+                    ? formatCurrency(wallet?.bonus_balance || 0)
+                    : `${country.currencySymbol}••••`}
+                </Text>
+              </View>
+            )}
 
             {/* Expandable Account Details - ONE-CLICK VIRTUAL ACCOUNT */}
             {showAccountDetails && (

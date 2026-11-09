@@ -5,6 +5,7 @@ import { Radius, Spacing, Typography } from "@/constants/Colors";
 import { getCountryConfig } from "@/constants/countryConfig";
 import { isValidDestinationPhone, toMsisdn } from "@/constants/networkDetection";
 import { useFundWallet } from "@/hooks/useFundWallet";
+import { useWallet } from "@/hooks/useWallet";
 import { useProfile } from "@/hooks/useProfiles";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -51,6 +52,7 @@ export default function WalletScreen() {
   } = useVirtualAccounts();
   const createVirtualAccountMutation = useCreateVirtualAccount();
   const fundWalletMutation = useFundWallet();
+  const { data: wallet } = useWallet();
 
   // State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -175,6 +177,43 @@ export default function WalletScreen() {
             paddingVertical: Spacing.lg,
           }}
         >
+          {/* Non-withdrawable app first-deposit bonus, shown separately
+              from the withdrawable balance. Hidden until one is earned. */}
+          {(wallet?.bonus_balance ?? 0) > 0 && (
+            <Card
+              variant="elevated"
+              padding="md"
+              style={{ marginBottom: Spacing.lg }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.sm,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  🎁 Bonus Balance
+                </Text>
+                <Text
+                  style={{
+                    fontSize: Typography.sizes.lg,
+                    fontWeight: Typography.weights.bold,
+                    color: colors.primary,
+                  }}
+                >
+                  {country.currencySymbol}
+                  {(wallet?.bonus_balance ?? 0).toFixed(2)}
+                </Text>
+              </View>
+            </Card>
+          )}
+
           {/* Loading State */}
           {!isVirtualAccountCountry ? (
             // MOBILE MONEY COUNTRY (korapay / flutterwave)

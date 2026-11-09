@@ -13,11 +13,18 @@ import { callStoreFunction } from "@/lib/storeApi";
 export interface Wallet {
   id: string;
   balance: number;
+  /** Non-withdrawable, spendable app first-deposit bonus. */
+  bonus_balance: number;
   currency?: string | null;
 }
 
 interface WalletResponse {
-  wallet: { id: string; balance: number; currency: string | null } | null;
+  wallet: {
+    id: string;
+    balance: number;
+    bonus_balance?: number;
+    currency: string | null;
+  } | null;
   virtual_accounts: any[];
 }
 
@@ -35,6 +42,7 @@ export function useWallet() {
       return {
         id: data.wallet?.id ?? "",
         balance: data.wallet?.balance ?? 0,
+        bonus_balance: data.wallet?.bonus_balance ?? 0,
         currency: data.wallet?.currency ?? null,
       };
     },
